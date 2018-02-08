@@ -2,7 +2,6 @@ package fs2json
 
 import cats.effect.IO
 import fs2._
-import io.circe.numbers.BiggerDecimal
 
 import scala.language.higherKinds
 
@@ -17,7 +16,7 @@ case object ArrayStart extends JsonToken
 case object ArrayEnd extends JsonToken
 
 case class JsonString(value: String) extends JsonToken
-case class JsonNumber(value: BiggerDecimal) extends JsonToken
+case class JsonNumber(value: String) extends JsonToken
 case object JsonTrue extends JsonToken
 case object JsonFalse extends JsonToken
 case object JsonNull extends JsonToken
@@ -32,10 +31,10 @@ object Test extends StreamApp[IO] {
       false,
       null,
       {},
-      ["Hello world!"]
+      ["Hello world!", "World\nHello!"]
        {
        "foo": "bar",
-       "baz":  {"1" :   "2", "3": "4"}
+       "baz":  {"1" :   -2.1234, "3": "4"}
       },
       ]
     """
@@ -43,7 +42,6 @@ object Test extends StreamApp[IO] {
     Stream.emit(jsonString)
       .through(text.utf8Encode)
       .through(tokenParser)
-        .chunks
       .evalMap { token =>
         IO(println(token))
       }
