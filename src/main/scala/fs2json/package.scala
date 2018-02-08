@@ -169,10 +169,13 @@ package object fs2json {
       }) :+ token.toString
     }
 
-    def processToken(state: State, token: JsonToken): State = token match {
-      case ObjectStart | ArrayStart => State(formatOutput(token, state), Some(token), state.level + 1)
-      case ObjectEnd | ArrayEnd => State(formatOutput(token, state), Some(token), state.level - 1)
-      case _ => State(formatOutput(token, state), Some(token), state.level)
+    def processToken(state: State, token: JsonToken): State = {
+      val nextLevel = token match {
+        case ObjectStart | ArrayStart => state.level + 1
+        case ObjectEnd | ArrayEnd => state.level - 1
+        case _ => state.level
+      }
+      State(formatOutput(token, state), Some(token), nextLevel)
     }
 
     def next(stream: fs2.Stream[F, JsonToken], lastToken: Option[JsonToken] = None, level: Int = 0): fs2.Pull[F, String, Unit] = {
