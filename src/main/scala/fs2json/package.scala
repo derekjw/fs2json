@@ -94,9 +94,9 @@ package object fs2json {
     @tailrec
     def findStringEnd(pos: Int, byteArray: Array[Byte]): Int = {
       if (pos < byteArray.length) {
-        byteArray(pos) match {
-          case 92 => findStringEnd(pos + 2, byteArray)
-          case 34 => pos
+        (byteArray(pos): @switch) match {
+          case '\\' => findStringEnd(pos + 2, byteArray)
+          case '"' => pos
           case _ => findStringEnd(pos + 1, byteArray)
         }
       } else pos
