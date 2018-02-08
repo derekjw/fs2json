@@ -169,23 +169,16 @@ package object fs2json {
       }) :+ token.toString
     }
 
+    def processToken(state: State, token: JsonToken): State = token match {
+      case ObjectStart | ArrayStart => State(formatOutput(token, state), Some(token), state.level + 1)
+      case ObjectEnd | ArrayEnd => State(formatOutput(token, state), Some(token), state.level - 1)
+      case _ => State(formatOutput(token, state), Some(token), state.level)
+    }
+
     def next(stream: fs2.Stream[F, JsonToken], lastToken: Option[JsonToken] = None, level: Int = 0): fs2.Pull[F, String, Unit] = {
       stream.pull.unconsChunk.flatMap {
         case Some((tokens, rest)) =>
-          val state = tokens.foldLeft(State(Vector.empty, lastToken, level)) { (s, token) =>
-            token match {
-              case ObjectStart => State(formatOutput(token, s), Some(token), s.level + 1)
-              case ObjectEnd => State(formatOutput(token, s), Some(token), s.level - 1)
-              case ArrayStart => State(formatOutput(token, s), Some(token), s.level + 1)
-              case ArrayEnd => State(formatOutput(token, s), Some(token), s.level - 1)
-              case JsonNull => State(formatOutput(token, s), Some(token), s.level)
-              case JsonTrue => State(formatOutput(token, s), Some(token), s.level)
-              case JsonFalse => State(formatOutput(token, s), Some(token), s.level)
-              case JsonString(_) => State(formatOutput(token, s), Some(token), s.level)
-              case JsonNumber(_) => State(formatOutput(token, s), Some(token), s.level)
-              case ObjectField(_) => State(formatOutput(token, s), Some(token), s.level)
-            }
-          }
+          val state = tokens.foldLeft(State(Vector.empty, lastToken, level))(processToken)
           fs2.Pull.output(fs2.Segment.singleton(state.output.mkString)) >> next(rest, state.lastToken, state.level)
         case None => fs2.Pull.done
       }
