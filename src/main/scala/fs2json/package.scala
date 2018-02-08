@@ -2,17 +2,16 @@ import fs2._
 
 import scala.annotation.{switch, tailrec}
 import scala.collection.immutable.IntMap
-import scala.collection.mutable
 import scala.language.higherKinds
 
 package object fs2json {
   private val numberByte: Set[Byte] = (('0' to '9') ++ Seq('-', '.', '+', 'e', 'E')).map(_.toByte).toSet
 
-  sealed trait ContextState
+  private sealed trait ContextState
 
-  case object InObject extends ContextState
-  case object InObjectField extends ContextState
-  case object InArray extends ContextState
+  private case object InObject extends ContextState
+  private case object InObjectField extends ContextState
+  private case object InArray extends ContextState
 
   def tokenParser[F[_]]: Pipe[F, Byte, JsonToken] =
     _.chunks.through(tokenParserC)
@@ -128,15 +127,7 @@ package object fs2json {
   }
 
   def valueStreamToArray[F[_]]: fs2.Pipe[F, JsonToken, JsonToken] = Stream.emit(ArrayStart) ++ _ ++ Stream.emit(ArrayEnd)
-
-  sealed trait JsonStyle
-
-  object JsonStyle {
-    case object NoSpaces extends JsonStyle
-    case object Pretty extends JsonStyle
-    case class SemiPretty(levelLimit: Int) extends JsonStyle
-  }
-
+  
   def prettyPrinter[F[_]](jsonStyle: JsonStyle = JsonStyle.NoSpaces): fs2.Pipe[F, JsonToken, String] = { stream =>
     case class State(output: Vector[String], lastToken: Option[JsonToken] = None, level: Int = 0)
 
