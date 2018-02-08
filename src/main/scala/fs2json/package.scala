@@ -1,162 +1,127 @@
 import fs2._
 
+import scala.annotation.{switch, tailrec}
 import scala.language.higherKinds
 
 package object fs2json {
-  private val whitespace: Set[Byte] = Set(' ', '\n', '\r', '\t', ',', ':').map(_.toByte)
+  private val numberByte: Set[Byte] = (('0' to '9') ++ Seq('-', '.', '+', 'e', 'E')).map(_.toByte).toSet
 
-  private val objectStart: Byte = '{'
-  private val objectEnd: Byte = '}'
-  private val arrayStart: Byte = '['
-  private val arrayEnd: Byte = ']'
-  private val trueStart: Byte = 't'
-  private val trueEnd: Vector[Byte] = Vector('r', 'u', 'e').map(_.toByte)
-  private val falseStart: Byte = 'f'
-  private val falseEnd: Vector[Byte] = Vector('a', 'l', 's', 'e').map(_.toByte)
-  private val nullStart: Byte = 'n'
-  private val nullEnd: Vector[Byte] = Vector('u', 'l', 'l').map(_.toByte)
-  private val stringDelimiter: Byte = '"'
-  private val stringEscape: Byte = '\\'
-  private val stringBackspace: Byte = 'b'
-  private val stringFormfeed: Byte = 'f'
-  private val stringNewline: Byte = 'n'
-  private val stringReturn: Byte = 'r'
-  private val stringTab: Byte = 't'
-  private val stringCheck: Set[Byte] = Set(stringDelimiter, stringEscape)
-  private val numberStart: Set[Byte] = (('0' to '9').toSet + '-').map(_.toByte)
-  private val numberByte: Set[Byte] = numberStart ++ Seq('.', '+', 'e', 'E').map(_.toByte)
+  sealed trait ContextState
 
-  sealed trait State
+  case object InObject extends ContextState
+  case object InObjectField extends ContextState
+  case object InArray extends ContextState
 
-  case object InObject extends State
-  case object InObjectField extends State
-  case object InArray extends State
+  def tokenParser[F[_]]: Pipe[F, Byte, JsonToken] =
+    _.chunks.through(tokenParserC)
 
-  def tokenParser[F[_]]: Pipe[F, Byte, JsonToken] = {
-    def simpleToken(stream: Stream[F, Byte], expected: Vector[Byte], result: JsonToken, stateStack: List[State]): Pull[F, JsonToken, Unit] = {
-      stream.pull.unconsN(expected.length).flatMap {
-        case Some((rue, rest)) =>
-          if (rue.force.toVector == expected) {
-            Pull.output1(result) >> next(rest, stateStack)
-          } else {
-            Pull.raiseError(TokenParserFailure("ruh roh"))
-          }
-        case None =>
-          Pull.raiseError(TokenParserFailure("ruh roh"))
-      }
-    }
+  def tokenParserC[F[_]]: Pipe[F, Chunk[Byte], JsonToken] = {
 
-    def stringToken(stream: Stream[F, Byte], stateStack: List[State], jsonToken: String => JsonToken, andThen: (Stream[F, Byte], List[State]) => Pull[F, JsonToken, Unit], result: Catenable[Chunk[Byte]] = Catenable.empty): Pull[F, JsonToken, Unit] = {
-      stream.pull.unconsChunk.flatMap {
-        case Some((chunk, rest)) =>
-          chunk.indexWhere(stringCheck) match {
-            case None =>
-              stringToken(rest, stateStack, jsonToken, andThen, result :+ chunk)
-            case Some(strEnd) =>
-              chunk.apply(strEnd) match {
-                case `stringDelimiter` =>
-                  val strChunk = chunk.take(strEnd)
-                  val restChunk = chunk.drop(strEnd + 1)
-                  val byteArray = Segment.catenatedChunks(result :+ strChunk).force.toArray
-                  Pull.output1(jsonToken(new String(byteArray))) >> andThen(Stream.chunk(restChunk) ++ rest, stateStack)
-                case `stringEscape` =>
-                  val strChunk = chunk.take(strEnd)
-                  val restChunk = chunk.drop(strEnd + 1)
-                  rest.cons(Segment.chunk(restChunk)).pull.uncons1.flatMap {
-                    case Some((byte, rest2)) => stringUnescape(byte, rest2, stateStack, jsonToken, andThen, result :+ strChunk)
-                    case None => Pull.raiseError(TokenParserFailure("ruh roh"))
-                  }
-              }
-          }
-        case None =>
-          Pull.raiseError(TokenParserFailure("ruh roh"))
-      }
-    }
-
-    // TODO: Handle unicode escape
-    def stringUnescape(byte: Byte, stream: Stream[F, Byte], stateStack: List[State], jsonToken: String => JsonToken, andThen: (Stream[F, Byte], List[State]) => Pull[F, JsonToken, Unit], result: Catenable[Chunk[Byte]]): Pull[F, JsonToken, Unit] = {
-      byte match {
-        case `stringBackspace` =>
-          stringToken(stream, stateStack, jsonToken, andThen, result :+ Chunk[Byte]('\b'))
-        case `stringFormfeed` =>
-          stringToken(stream, stateStack, jsonToken, andThen, result :+ Chunk[Byte]('\f'))
-        case `stringNewline` =>
-          stringToken(stream, stateStack, jsonToken, andThen, result :+ Chunk[Byte]('\n'))
-        case `stringReturn` =>
-          stringToken(stream, stateStack, jsonToken, andThen, result :+ Chunk[Byte]('\r'))
-        case `stringTab` =>
-          stringToken(stream, stateStack, jsonToken, andThen, result:+ Chunk[Byte]('\t'))
-        case other =>
-          stringToken(stream, stateStack, jsonToken, andThen, result :+ Chunk[Byte](other))
-      }
-    }
-
-    def numberToken(stream: Stream[F, Byte], stateStack: List[State], result: Catenable[Chunk[Byte]] = Catenable.empty): Pull[F, JsonToken, Unit] = {
-      stream.pull.unconsChunk.flatMap {
-        case Some((chunk, rest)) =>
-          chunk.indexWhere(byte => !numberByte(byte)) match {
-            case None => numberToken(rest, stateStack, result :+ chunk)
-            case Some(numEnd) =>
-              val (numChunk, restChunk) = chunk.splitAt(numEnd)
-              val byteArray = Segment.catenatedChunks(result :+ numChunk).force.toArray
-              Pull.output1(JsonNumber(new String(byteArray))) >> next(Stream.chunk(restChunk) ++ rest, stateStack)
-          }
-        case None =>
-          val byteArray = Segment.catenatedChunks(result).force.toArray
-          Pull.output1(JsonNumber(new String(byteArray))) >> Pull.done
-      }
-    }
-
-    def dropState(target: State, stack: List[State]): List[State] = stack match {
+    def dropState(target: ContextState, stack: List[ContextState]): List[ContextState] = stack match {
       case `target` :: rest => rest
       case other => other
     }
 
-    // TODO: preserve segments when possible
-    def next(stream: Stream[F, Byte], stateStack: List[State]): Pull[F, JsonToken, Unit] = {
-      stream.pull.uncons1.flatMap {
-        case Some((byte, rest)) =>
-          byte match {
-            case ws if whitespace(ws) =>
-              next(rest, stateStack)
-
-            case `objectStart` =>
-              Pull.output1(ObjectStart) >> next(rest, InObject :: dropState(InObjectField, stateStack))
-
-            case `objectEnd` if stateStack.headOption.contains(InObject) =>
-              Pull.output1(ObjectEnd) >> next(rest, dropState(InObject, stateStack))
-
-            case `arrayStart` =>
-              Pull.output1(ArrayStart) >> next(rest, InArray :: dropState(InObjectField, stateStack))
-
-            case `arrayEnd` if stateStack.headOption.contains(InArray) =>
-              Pull.output1(ArrayEnd) >> next(rest, dropState(InArray, stateStack))
-
-            case `trueStart` =>
-              simpleToken(rest, trueEnd, JsonTrue, dropState(InObjectField, stateStack))
-
-            case `falseStart` =>
-              simpleToken(rest, falseEnd, JsonFalse, dropState(InObjectField, stateStack))
-
-            case `nullStart` =>
-              simpleToken(rest, nullEnd, JsonNull, dropState(InObjectField, stateStack))
-
-            case `stringDelimiter` if stateStack.headOption.contains(InObject) =>
-              stringToken(rest, stateStack, ObjectField, (s, st) => next(s, InObjectField :: st))
-
-            case `stringDelimiter` =>
-              stringToken(rest, dropState(InObjectField, stateStack), JsonString, next)
-
-            case number if numberStart(number) =>
-              numberToken(rest.cons1(number), dropState(InObjectField, stateStack))
-
-            case _ =>
-              Pull.raiseError(TokenParserFailure("ruh roh"))
-          }
-        case None => Pull.done
+    @tailrec
+    def parse(pos: Int, byteArray: Array[Byte], output: Vector[JsonToken], stateStack: List[ContextState]): ParserState = {
+      if (pos >= byteArray.length) {
+        ParserState(output, Chunk.empty, stateStack)
+      } else {
+        (byteArray(pos): @switch) match {
+          case ' ' | '\n' | '\r' | '\t' | ',' | ':' =>
+            parse(pos + 1, byteArray, output, stateStack)
+          case '{' =>
+            parse(pos + 1, byteArray, output :+ ObjectStart, InObject :: dropState(InObjectField, stateStack))
+          case '}' if stateStack.headOption.contains(InObject) =>
+            parse(pos + 1, byteArray, output :+ ObjectEnd, dropState(InObject, stateStack))
+          case '[' =>
+            parse(pos + 1, byteArray, output :+ ArrayStart, InArray :: dropState(InObjectField, stateStack))
+          case ']' if stateStack.headOption.contains(InArray) =>
+            parse(pos + 1, byteArray, output :+ ArrayEnd, dropState(InArray, stateStack))
+          case 't' =>
+            if (pos + 3 < byteArray.length) { // TODO: verify bytes are correct
+              parse(pos + 4, byteArray, output :+ JsonTrue, dropState(InObjectField, stateStack))
+            } else {
+              ParserState(output, Chunk.bytes(byteArray, pos, byteArray.length - pos), stateStack)
+            }
+          case 'f' =>
+            if (pos + 4 < byteArray.length) { // TODO: verify bytes are correct
+              parse(pos + 5, byteArray, output :+ JsonFalse, dropState(InObjectField, stateStack))
+            } else {
+              ParserState(output, Chunk.bytes(byteArray, pos, byteArray.length - pos), stateStack)
+            }
+          case 'n' =>
+            if (pos + 3 < byteArray.length) { // TODO: verify bytes are correct
+              parse(pos + 4, byteArray, output :+ JsonNull, dropState(InObjectField, stateStack))
+            } else {
+              ParserState(output, Chunk.bytes(byteArray, pos, byteArray.length - pos), stateStack)
+            }
+          case '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '-' =>
+            val endPos = findNumberEnd(pos, byteArray)
+            if (endPos < byteArray.length) {
+              val numberString = new String(byteArray.slice(pos, endPos))
+              parse(endPos, byteArray, output :+ JsonNumber(numberString), dropState(InObjectField, stateStack))
+            } else {
+              ParserState(output, Chunk.bytes(byteArray, pos, byteArray.length - pos), stateStack)
+            }
+          case '"' =>
+            if (stateStack.headOption.contains(InObject)) {
+              val endPos = findStringEnd(pos + 1, byteArray)
+              if (endPos < byteArray.length) {
+                val string = new String(byteArray.slice(pos + 1, endPos))
+                parse(endPos + 1, byteArray, output :+ ObjectField(string), InObjectField ::stateStack)
+              } else {
+                ParserState(output, Chunk.bytes(byteArray, pos, byteArray.length - pos), stateStack)
+              }
+            } else {
+              val endPos = findStringEnd(pos + 1, byteArray)
+              if (endPos < byteArray.length) {
+                val string = new String(byteArray.slice(pos + 1, endPos))
+                parse(endPos + 1, byteArray, output :+ JsonString(string), dropState(InObjectField, stateStack))
+              } else {
+                ParserState(output, Chunk.bytes(byteArray, pos, byteArray.length - pos), stateStack)
+              }
+            }
+        }
       }
     }
 
-    next(_, Nil).stream
+    @tailrec
+    def findNumberEnd(pos: Int, byteArray: Array[Byte]): Int =
+      if (pos < byteArray.length && numberByte(byteArray(pos))) findNumberEnd(pos + 1, byteArray) else pos
+
+    @tailrec
+    def findStringEnd(pos: Int, byteArray: Array[Byte]): Int = {
+      if (pos < byteArray.length) {
+        byteArray(pos) match {
+          case 92 => findStringEnd(pos + 2, byteArray)
+          case 34 => pos
+          case _ => findStringEnd(pos + 1, byteArray)
+        }
+      } else pos
+    }
+
+
+    case class ParserState(output: Vector[JsonToken], buffer: Chunk[Byte], stateStack: List[ContextState])
+
+    def processSingleChunk(parserState: ParserState, chunk: Chunk[Byte]): ParserState = {
+      val allBytes = Array.concat(parserState.buffer.toArray, chunk.toArray)
+      parse(0, allBytes, parserState.output, parserState.stateStack)
+    }
+
+    def next(buffer: Chunk[Byte], stream: Stream[F, Chunk[Byte]], stateStack: List[ContextState]): Pull[F, JsonToken, Unit] = {
+      stream.pull.unconsChunk.flatMap {
+        case Some((byteChunks, rest)) =>
+          val parserState = byteChunks.foldLeft(ParserState(Vector.empty, buffer, stateStack))(processSingleChunk)
+          if (parserState.output.nonEmpty) {
+            Pull.output(Segment.seq(parserState.output)) >> next(parserState.buffer, rest, parserState.stateStack)
+          } else {
+            next(parserState.buffer, rest, parserState.stateStack)
+          }
+        case None => Pull.done // TODO: fail if buffer is not empty
+      }
+    }
+
+    next(Chunk.empty, _, Nil).stream
   }
 }
