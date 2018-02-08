@@ -127,7 +127,7 @@ package object fs2json {
   }
 
   def valueStreamToArray[F[_]]: fs2.Pipe[F, JsonToken, JsonToken] = Stream.emit(ArrayStart) ++ _ ++ Stream.emit(ArrayEnd)
-  
+
   def prettyPrinter[F[_]](jsonStyle: JsonStyle = JsonStyle.NoSpaces): fs2.Pipe[F, JsonToken, String] = { stream =>
     case class State(output: Vector[String], lastToken: Option[JsonToken] = None, level: Int = 0)
 

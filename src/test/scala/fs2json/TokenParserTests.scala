@@ -37,18 +37,36 @@ object TokenParserTests extends TestSuite {
           |  }
           |]""".stripMargin
 
-      val result = Stream
-        .emit(jsonString)
-        .through(text.utf8Encode)
-        .through(tokenParser)
-        .through(valueStreamToArray)
-        .through(prettyPrinter(JsonStyle.SemiPretty(2)))
-        .covary[IO]
-        .compile
-        .foldMonoid
-        .unsafeRunSync()
+      "chunked" - {
+        val result = Stream
+          .emit(jsonString)
+          .through(text.utf8Encode)
+          .through(tokenParser)
+          .through(valueStreamToArray)
+          .through(prettyPrinter(JsonStyle.SemiPretty(2)))
+          .covary[IO]
+          .compile
+          .foldMonoid
+          .unsafeRunSync()
 
-      assert(result == expected)
+        assert(result == expected)
+      }
+
+      "unchunked" - {
+        val result = Stream
+          .emit(jsonString)
+          .through(text.utf8Encode)
+          .unchunk
+          .through(tokenParser)
+          .through(valueStreamToArray)
+          .through(prettyPrinter(JsonStyle.SemiPretty(2)))
+          .covary[IO]
+          .compile
+          .foldMonoid
+          .unsafeRunSync()
+
+        assert(result == expected)
+      }
 
     }
   }
