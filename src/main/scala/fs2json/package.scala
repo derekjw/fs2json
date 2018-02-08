@@ -124,4 +124,48 @@ package object fs2json {
 
     next(Chunk.empty, _, Nil).stream
   }
+
+  def tokensToString[F[_]](): fs2.Pipe[F, JsonToken, String] = { stream =>
+    case class State(output: Vector[String], lastToken: Option[JsonToken] = None, level: Int = 0)
+
+    def formatOutput(output: Vector[String], token: JsonToken, lastToken: Option[JsonToken], level: Int) = {
+      (token match {
+        case ObjectEnd | ArrayEnd =>
+          if (level > 3)
+            output
+          else
+            output :+ "\n"
+        case _ => lastToken match {
+          case Some(ObjectStart | ArrayStart | _: ObjectField) | None => output
+          case _ if level > 3 => output :+ ","
+          case _ => output :+ ",\n"
+        }
+      }) :+ token.toString
+    }
+
+    def next(stream: fs2.Stream[F, JsonToken], lastToken: Option[JsonToken] = None, level: Int = 0): fs2.Pull[F, String, Unit] = {
+      stream.pull.unconsChunk.flatMap {
+        case Some((tokens, rest)) =>
+          val state = tokens.foldLeft(State(Vector.empty, lastToken, level)) { (s, token) =>
+            token match {
+              case ObjectStart => State(formatOutput(s.output, token, s.lastToken, s.level + 1), Some(token), s.level + 1)
+              case ObjectEnd => State(formatOutput(s.output, token, s.lastToken, s.level - 1), Some(token), s.level - 1)
+              case ArrayStart => State(formatOutput(s.output, token, s.lastToken, s.level + 1), Some(token), s.level + 1)
+              case ArrayEnd => State(formatOutput(s.output, token, s.lastToken, s.level - 1), Some(token), s.level - 1)
+              case JsonNull => State(formatOutput(s.output, token, s.lastToken, s.level), Some(token), s.level)
+              case JsonTrue => State(formatOutput(s.output, token, s.lastToken, s.level), Some(token), s.level)
+              case JsonFalse => State(formatOutput(s.output, token, s.lastToken, s.level), Some(token), s.level)
+              case JsonString(_) => State(formatOutput(s.output, token, s.lastToken, s.level), Some(token), s.level)
+              case JsonNumber(_) => State(formatOutput(s.output, token, s.lastToken, s.level), Some(token), s.level)
+              case ObjectField(_) => State(formatOutput(s.output, token, s.lastToken, s.level), Some(token), s.level)
+            }
+          }
+          fs2.Pull.output(fs2.Segment.singleton(state.output.mkString)) >> next(rest, state.lastToken, state.level)
+        case None => fs2.Pull.done
+      }
+    }
+
+    next(stream).stream
+  }
+
 }
