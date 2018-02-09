@@ -44,6 +44,7 @@ object TokenParserTests extends TestSuite {
           .through(tokenParser)
           .through(valueStreamToArray)
           .through(prettyPrinter(JsonStyle.SemiPretty(2)))
+          .through(text.utf8Decode)
           .covary[IO]
           .compile
           .foldMonoid
@@ -60,6 +61,7 @@ object TokenParserTests extends TestSuite {
           .through(tokenParser)
           .through(valueStreamToArray)
           .through(prettyPrinter(JsonStyle.SemiPretty(2)))
+          .through(text.utf8Decode)
           .covary[IO]
           .compile
           .foldMonoid
@@ -74,6 +76,7 @@ object TokenParserTests extends TestSuite {
           .through(text.utf8Encode)
           .through(tokenParser)
           .through(prettyPrinter(JsonStyle.SemiPretty(1)))
+          .through(text.utf8Decode)
           .covary[IO]
           .compile
           .foldMonoid
@@ -99,6 +102,7 @@ object TokenParserTests extends TestSuite {
           .through(text.utf8Encode)
           .through(tokenParser)
           .through(prettyPrinter(JsonStyle.NoSpaces))
+          .through(text.utf8Decode)
           .covary[IO]
           .compile
           .foldMonoid

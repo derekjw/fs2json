@@ -60,8 +60,7 @@ package object fs2json {
           case '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '-' =>
             val endPos = findNumberEnd(pos, byteArray)
             if (endPos < byteArray.length) {
-              val numberString = new String(byteArray.slice(pos, endPos))
-              parse(endPos, byteArray, output :+ JsonNumber(numberString), dropState(InObjectField, stateStack))
+              parse(endPos, byteArray, output :+ JsonNumber(Chunk.Bytes(byteArray, pos, endPos - pos)), dropState(InObjectField, stateStack))
             } else {
               ParserState(output, Chunk.bytes(byteArray, pos, byteArray.length - pos), stateStack)
             }
@@ -69,8 +68,7 @@ package object fs2json {
             if (stateStack.headOption.contains(InObject)) {
               val endPos = findStringEnd(pos + 1, byteArray)
               if (endPos < byteArray.length) {
-                val string = new String(byteArray.slice(pos, endPos))
-                parse(endPos, byteArray, output :+ ObjectField(string), InObjectField ::stateStack)
+                parse(endPos, byteArray, output :+ ObjectField(Chunk.Bytes(byteArray, pos, endPos - pos)), InObjectField ::stateStack)
               } else {
                 ParserState(output, Chunk.bytes(byteArray, pos, byteArray.length - pos), stateStack)
               }
@@ -78,7 +76,7 @@ package object fs2json {
               val endPos = findStringEnd(pos + 1, byteArray)
               if (endPos < byteArray.length) {
                 val string = new String(byteArray.slice(pos, endPos))
-                parse(endPos, byteArray, output :+ JsonString(string), dropState(InObjectField, stateStack))
+                parse(endPos, byteArray, output :+ JsonString(Chunk.Bytes(byteArray, pos, endPos - pos)), dropState(InObjectField, stateStack))
               } else {
                 ParserState(output, Chunk.bytes(byteArray, pos, byteArray.length - pos), stateStack)
               }
@@ -128,29 +126,34 @@ package object fs2json {
 
   def valueStreamToArray[F[_]]: fs2.Pipe[F, JsonToken, JsonToken] = Stream.emit(ArrayStart) ++ _ ++ Stream.emit(ArrayEnd)
 
-  def prettyPrinter[F[_]](jsonStyle: JsonStyle = JsonStyle.NoSpaces): fs2.Pipe[F, JsonToken, String] = { stream =>
-    case class State(output: Vector[String], lastToken: Option[JsonToken] = None, level: Int = 0)
+  def prettyPrinter[F[_]](jsonStyle: JsonStyle = JsonStyle.NoSpaces): fs2.Pipe[F, JsonToken, Byte] = { stream =>
+    case class State(output: Catenable[Chunk.Bytes], lastToken: Option[JsonToken] = None, level: Int = 0)
 
-    var indents = IntMap.empty[String]
+    val space = Chunk.Bytes(Array[Byte](' '))
+    val colon = Chunk.Bytes(Array[Byte](':'))
+    val comma = Chunk.Bytes(Array[Byte](','))
+    var indents = IntMap.empty[Chunk.Bytes]
 
     def getIndent(level: Int) = indents.get(level) match {
       case Some(s) => s
       case None =>
-        val s = "\n" + ("  " * level)
-        indents += (level -> s)
-        s
+        val arr = Array.fill[Byte](1 + (level * 2))(' ')
+        arr(0) = '\n'
+        val chunk = Chunk.Bytes(arr)
+        indents += (level -> chunk)
+        chunk
     }
 
-    def indent(output: Vector[String], level: Int, endToken: Boolean): Vector[String] = jsonStyle match {
+    def indent(output: Catenable[Chunk.Bytes], level: Int, endToken: Boolean): Catenable[Chunk.Bytes] = jsonStyle match {
       case JsonStyle.Pretty => output :+ getIndent(if (endToken) level - 1 else level)
       case JsonStyle.SemiPretty(levelLimit) if level <= levelLimit => output :+ getIndent(if (endToken) level - 1 else level)
-      case _ if level == 0 => output :+ "\n" // value stream, always new line
+      case _ if level == 0 => output :+ getIndent(0) // value stream, always new line
       case _ => output
     }
 
-    def fieldSpace(output: Vector[String], level: Int): Vector[String] = jsonStyle match {
-      case JsonStyle.Pretty => output :+ " "
-      case JsonStyle.SemiPretty(levelLimit) if level <= levelLimit => output :+ " "
+    def fieldSpace(output: Catenable[Chunk.Bytes], level: Int): Catenable[Chunk.Bytes] = jsonStyle match {
+      case JsonStyle.Pretty => output :+ space
+      case JsonStyle.SemiPretty(levelLimit) if level <= levelLimit => output :+ space
       case _ => output
     }
 
@@ -163,10 +166,10 @@ package object fs2json {
           }
         case _ => state.lastToken match {
           case Some(ObjectStart | ArrayStart) => indent(state.output, state.level, endToken = false)
-          case Some(_: ObjectField) => fieldSpace(state.output :+ ":", state.level)
+          case Some(_: ObjectField) => fieldSpace(state.output :+ colon, state.level)
           case None => state.output
           case _ if state.level == 0 => indent(state.output, 0, endToken = false)
-          case _ => indent(state.output :+ ",", state.level, endToken = false)
+          case _ => indent(state.output :+ comma, state.level, endToken = false)
         }
       }) :+ token.value
     }
@@ -180,11 +183,12 @@ package object fs2json {
       State(formatOutput(token, state), Some(token), nextLevel)
     }
 
-    def next(stream: fs2.Stream[F, JsonToken], lastToken: Option[JsonToken] = None, level: Int = 0): fs2.Pull[F, String, Unit] = {
+    def next(stream: fs2.Stream[F, JsonToken], lastToken: Option[JsonToken] = None, level: Int = 0): fs2.Pull[F, Byte, Unit] = {
       stream.pull.unconsChunk.flatMap {
         case Some((tokens, rest)) =>
-          val state = tokens.foldLeft(State(Vector.empty, lastToken, level))(processToken)
-          fs2.Pull.output(fs2.Segment.singleton(state.output.mkString)) >> next(rest, state.lastToken, state.level)
+          val state = tokens.foldLeft(State(Catenable.empty, lastToken, level))(processToken)
+          val compacted = Segment.catenatedChunks(state.output).force.toChunk
+          Pull.output(Segment.chunk(compacted)) >> next(rest, state.lastToken, state.level)
         case None => fs2.Pull.done
       }
     }
