@@ -69,16 +69,16 @@ package object fs2json {
             if (stateStack.headOption.contains(InObject)) {
               val endPos = findStringEnd(pos + 1, byteArray)
               if (endPos < byteArray.length) {
-                val string = new String(byteArray.slice(pos + 1, endPos))
-                parse(endPos + 1, byteArray, output :+ ObjectField(string), InObjectField ::stateStack)
+                val string = new String(byteArray.slice(pos, endPos))
+                parse(endPos, byteArray, output :+ ObjectField(string), InObjectField ::stateStack)
               } else {
                 ParserState(output, Chunk.bytes(byteArray, pos, byteArray.length - pos), stateStack)
               }
             } else {
               val endPos = findStringEnd(pos + 1, byteArray)
               if (endPos < byteArray.length) {
-                val string = new String(byteArray.slice(pos + 1, endPos))
-                parse(endPos + 1, byteArray, output :+ JsonString(string), dropState(InObjectField, stateStack))
+                val string = new String(byteArray.slice(pos, endPos))
+                parse(endPos, byteArray, output :+ JsonString(string), dropState(InObjectField, stateStack))
               } else {
                 ParserState(output, Chunk.bytes(byteArray, pos, byteArray.length - pos), stateStack)
               }
@@ -96,7 +96,7 @@ package object fs2json {
       if (pos < byteArray.length) {
         (byteArray(pos): @switch) match {
           case '\\' => findStringEnd(pos + 2, byteArray)
-          case '"' => pos
+          case '"' => pos + 1
           case _ => findStringEnd(pos + 1, byteArray)
         }
       } else pos
@@ -144,6 +144,7 @@ package object fs2json {
     def indent(output: Vector[String], level: Int, endToken: Boolean): Vector[String] = jsonStyle match {
       case JsonStyle.Pretty => output :+ getIndent(if (endToken) level - 1 else level)
       case JsonStyle.SemiPretty(levelLimit) if level <= levelLimit => output :+ getIndent(if (endToken) level - 1 else level)
+      case _ if level == 0 => output :+ "\n" // value stream, always new line
       case _ => output
     }
 
@@ -162,11 +163,12 @@ package object fs2json {
           }
         case _ => state.lastToken match {
           case Some(ObjectStart | ArrayStart) => indent(state.output, state.level, endToken = false)
-          case Some(_: ObjectField) => fieldSpace(state.output, state.level)
+          case Some(_: ObjectField) => fieldSpace(state.output :+ ":", state.level)
           case None => state.output
+          case _ if state.level == 0 => indent(state.output, 0, endToken = false)
           case _ => indent(state.output :+ ",", state.level, endToken = false)
         }
-      }) :+ token.toString
+      }) :+ token.value
     }
 
     def processToken(state: State, token: JsonToken): State = {

@@ -37,7 +37,7 @@ object TokenParserTests extends TestSuite {
           |  }
           |]""".stripMargin
 
-      "chunked" - {
+      "chunked into array" - {
         val result = Stream
           .emit(jsonString)
           .through(text.utf8Encode)
@@ -52,7 +52,7 @@ object TokenParserTests extends TestSuite {
         assert(result == expected)
       }
 
-      "unchunked" - {
+      "unchunked into array" - {
         val result = Stream
           .emit(jsonString)
           .through(text.utf8Encode)
@@ -66,6 +66,50 @@ object TokenParserTests extends TestSuite {
           .unsafeRunSync()
 
         assert(result == expected)
+      }
+
+      "value stream" - {
+        val result = Stream
+          .emit(jsonString)
+          .through(text.utf8Encode)
+          .through(tokenParser)
+          .through(prettyPrinter(JsonStyle.SemiPretty(1)))
+          .covary[IO]
+          .compile
+          .foldMonoid
+          .unsafeRunSync()
+
+        assert(result == """true
+                           |false
+                           |null
+                           |{}
+                           |[
+                           |  "Hello world!",
+                           |  "World\n\"Hello\"!"
+                           |]
+                           |{
+                           |  "foo": "bar",
+                           |  "baz": {"1":-2.1234,"3":"4"}
+                           |}""".stripMargin)
+      }
+
+      "value stream noSpaces" - {
+        val result = Stream
+          .emit(jsonString)
+          .through(text.utf8Encode)
+          .through(tokenParser)
+          .through(prettyPrinter(JsonStyle.NoSpaces))
+          .covary[IO]
+          .compile
+          .foldMonoid
+          .unsafeRunSync()
+
+        assert(result == """true
+                           |false
+                           |null
+                           |{}
+                           |["Hello world!","World\n\"Hello\"!"]
+                           |{"foo":"bar","baz":{"1":-2.1234,"3":"4"}}""".stripMargin)
       }
 
     }

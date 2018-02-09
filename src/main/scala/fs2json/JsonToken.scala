@@ -2,21 +2,24 @@ package fs2json
 
 import scala.language.higherKinds
 
-sealed trait JsonToken
+sealed trait JsonToken {
+  def value: String
+}
 
-case object ObjectStart extends JsonToken { override val toString = "{"}
-case object ObjectEnd extends JsonToken { override val toString = "}"}
+case object ObjectStart extends JsonToken { val value = "{"}
+case object ObjectEnd extends JsonToken { val value = "}"}
 
-case class ObjectField(value: String) extends JsonToken { override def toString = s""""$value":"""}
+case class ObjectField(value: String) extends JsonToken
 
-case object ArrayStart extends JsonToken { override val toString = "["}
-case object ArrayEnd extends JsonToken { override val toString = "]"}
+case object ArrayStart extends JsonToken { val value = "["}
+case object ArrayEnd extends JsonToken { val value = "]"}
 
-case class JsonString(value: String) extends JsonToken { override def toString = s""""$value""""}
-case class JsonNumber(value: String) extends JsonToken { override val toString: String = value}
-case object JsonTrue extends JsonToken { override val toString = "true"}
-case object JsonFalse extends JsonToken { override val toString = "false"}
-case object JsonNull extends JsonToken { override val toString = "null"}
+// TODO: add decode methods for string and number
+case class JsonString(value: String) extends JsonToken
+case class JsonNumber(value: String) extends JsonToken
+case object JsonTrue extends JsonToken { val value = "true"}
+case object JsonFalse extends JsonToken { val value = "false"}
+case object JsonNull extends JsonToken { val value = "null"}
 
 case class TokenParserFailure(message: String, cause: Option[Throwable] = None) extends RuntimeException(message, cause.orNull)
 
