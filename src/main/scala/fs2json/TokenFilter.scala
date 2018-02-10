@@ -30,72 +30,76 @@ trait ObjectTokenFilterBuilder { parent =>
     val targetFields = fieldNames.map(ObjectField.fromString).toSet
     val targetDirection = parent.targetPath
 
-    case class State(dropRanges: Vector[(Int, Int)], path: List[TokenFilter.Direction], toTargetPath: List[TokenFilter.Direction], fromTargetPath: List[TokenFilter.Direction])
+    case class State(dropping: Boolean, dropRanges: Vector[(Int, Int)], path: List[TokenFilter.Direction], toTargetPath: List[TokenFilter.Direction], fromTargetPath: List[TokenFilter.Direction])
 
     @tailrec
     def findDropRanges(chunk: Chunk[JsonToken], pos: Int, dropPos: Int, state: State): State =
       if (pos >= chunk.size) {
-        state
+        if (state.dropping) {
+          state.copy(dropRanges = state.dropRanges :+ (dropPos, pos))
+        } else {
+          state
+        }
       } else {
         chunk(pos) match {
           case objectField: ObjectField =>
             state match {
-              case State(dropRanges, Nil, Nil, fromTargetPath) if targetFields(objectField) => // begin dropping
-                findDropRanges(chunk, pos + 1, pos, State(dropRanges, Nil, Nil, fromTargetPath))
-              case State(_, Nil, (hd @ TokenFilter.DownField(`objectField`)) :: toTargetPath, fromTargetPath) => // going down towards target
+              case State(_, dropRanges, Nil, Nil, fromTargetPath) if targetFields(objectField) => // begin dropping
+                findDropRanges(chunk, pos + 1, pos, State(dropping = true, dropRanges, Nil, Nil, fromTargetPath))
+              case State(_, _, Nil, (hd @ TokenFilter.DownField(`objectField`)) :: toTargetPath, fromTargetPath) => // going down towards target
                 findDropRanges(chunk, pos + 1, dropPos, state.copy(toTargetPath = toTargetPath, fromTargetPath = hd :: fromTargetPath))
               case _ => // going down other path
                 findDropRanges(chunk, pos + 1, dropPos, state.copy(path = TokenFilter.DownField(objectField) :: state.path))
             }
           case ObjectEnd =>
             state match {
-              case State(dropRanges, TokenFilter.DownObject :: Nil, Nil, fromTargetPath) => // done dropping
-                findDropRanges(chunk, pos + 1, 0, State(dropRanges :+ (dropPos, pos + 1), Nil, Nil, fromTargetPath))
-              case State(_, Nil, toTargetPath, TokenFilter.DownObject :: (hd @ TokenFilter.DownField(_)) :: fromTargetPath) => // going back up from target
+              case State(_, dropRanges, TokenFilter.DownObject :: Nil, Nil, fromTargetPath) => // done dropping
+                findDropRanges(chunk, pos + 1, 0, State(dropping = false, dropRanges :+ (dropPos, pos + 1), Nil, Nil, fromTargetPath))
+              case State(_, _, Nil, toTargetPath, TokenFilter.DownObject :: (hd @ TokenFilter.DownField(_)) :: fromTargetPath) => // going back up from target
                 findDropRanges(chunk, pos + 1, dropPos, state.copy(toTargetPath = hd :: TokenFilter.DownObject :: toTargetPath, fromTargetPath = fromTargetPath))
-              case State(_, Nil, toTargetPath, TokenFilter.DownObject :: fromTargetPath) => // going back up from target
+              case State(_, _, Nil, toTargetPath, TokenFilter.DownObject :: fromTargetPath) => // going back up from target
                 findDropRanges(chunk, pos + 1, dropPos, state.copy(toTargetPath = TokenFilter.DownObject :: toTargetPath, fromTargetPath = fromTargetPath))
-              case State(_, TokenFilter.DownObject :: TokenFilter.DownField(_) :: tl, _, _) => // going back up
+              case State(_, _, TokenFilter.DownObject :: TokenFilter.DownField(_) :: tl, _, _) => // going back up
                 findDropRanges(chunk, pos + 1, dropPos, state.copy(path = tl))
-              case State(_, TokenFilter.DownObject :: tl, _, _) => // going back up
+              case State(_, _, TokenFilter.DownObject :: tl, _, _) => // going back up
                 findDropRanges(chunk, pos + 1, dropPos, state.copy(path = tl))
               case _ => // TODO: better failure handling of bad json
                 throw new RuntimeException("ruh roh")
             }
           case ObjectStart =>
             state match {
-              case State(_, Nil, TokenFilter.DownObject :: toTargetPath, fromTargetPath) => // going down towards target
+              case State(_, _, Nil, TokenFilter.DownObject :: toTargetPath, fromTargetPath) => // going down towards target
                 findDropRanges(chunk, pos + 1, dropPos, state.copy(toTargetPath = toTargetPath, fromTargetPath = TokenFilter.DownObject :: fromTargetPath))
               case _ => // going down other path
                 findDropRanges(chunk, pos + 1, dropPos, state.copy(path = TokenFilter.DownObject :: state.path))
             }
           case ArrayEnd =>
             state match {
-              case State(dropRanges, TokenFilter.DownArray :: Nil, Nil, fromTargetPath) => // done dropping
-                findDropRanges(chunk, pos + 1, 0, State(dropRanges :+ (dropPos, pos + 1), Nil, Nil, fromTargetPath))
-              case State(_, Nil, toTargetPath, TokenFilter.DownArray :: (hd @ TokenFilter.DownField(_)) :: fromTargetPath) => // going back up from target
+              case State(_, dropRanges, TokenFilter.DownArray :: Nil, Nil, fromTargetPath) => // done dropping
+                findDropRanges(chunk, pos + 1, 0, State(dropping = false, dropRanges :+ (dropPos, pos + 1), Nil, Nil, fromTargetPath))
+              case State(_, _, Nil, toTargetPath, TokenFilter.DownArray :: (hd @ TokenFilter.DownField(_)) :: fromTargetPath) => // going back up from target
                 findDropRanges(chunk, pos + 1, dropPos, state.copy(toTargetPath = hd :: TokenFilter.DownArray :: toTargetPath, fromTargetPath = fromTargetPath))
-              case State(_, Nil, toTargetPath, TokenFilter.DownArray :: fromTargetPath) => // going back up from target
+              case State(_, _, Nil, toTargetPath, TokenFilter.DownArray :: fromTargetPath) => // going back up from target
                 findDropRanges(chunk, pos + 1, dropPos, state.copy(toTargetPath = TokenFilter.DownArray :: toTargetPath, fromTargetPath = fromTargetPath))
-              case State(_, TokenFilter.DownArray :: TokenFilter.DownField(_) :: tl, _, _) => // going back up from other path
+              case State(_, _, TokenFilter.DownArray :: TokenFilter.DownField(_) :: tl, _, _) => // going back up from other path
                 findDropRanges(chunk, pos + 1, dropPos, state.copy(path = tl))
-              case State(_, TokenFilter.DownArray :: tl, _, _) => // going back up from other path
+              case State(_, _, TokenFilter.DownArray :: tl, _, _) => // going back up from other path
                 findDropRanges(chunk, pos + 1, dropPos, state.copy(path = tl))
               case _ => // TODO: better failure handling of bad json
                 throw new RuntimeException("ruh roh")
             }
           case ArrayStart =>
             state match {
-              case State(_, Nil, TokenFilter.DownArray :: toTargetPath, fromTargetPath) => // going down towards target
+              case State(_, _, Nil, TokenFilter.DownArray :: toTargetPath, fromTargetPath) => // going down towards target
                 findDropRanges(chunk, pos + 1, dropPos, state.copy(toTargetPath = toTargetPath, fromTargetPath = TokenFilter.DownArray :: fromTargetPath))
               case _ => // going down other path
                 findDropRanges(chunk, pos + 1, dropPos, state.copy(path = TokenFilter.DownArray :: state.path))
             }
           case JsonNull | JsonTrue | JsonFalse | _: JsonNumber | _: JsonString =>
             state match {
-              case State(dropRanges, Nil, Nil, fromTargetPath) => // done dropping
-                findDropRanges(chunk, pos + 1, 0, State(dropRanges :+ (dropPos, pos + 1), Nil, Nil, fromTargetPath))
-              case State(_, TokenFilter.DownField(_) :: path, _, _) =>
+              case State(_, dropRanges, Nil, Nil, fromTargetPath) => // done dropping
+                findDropRanges(chunk, pos + 1, 0, State(dropping = false, dropRanges :+ (dropPos, pos + 1), Nil, Nil, fromTargetPath))
+              case State(_, _, TokenFilter.DownField(_) :: path, _, _) =>
                 findDropRanges(chunk, pos + 1, dropPos, state.copy(path = path))
               case _ =>
                 findDropRanges(chunk, pos + 1, dropPos, state)
@@ -103,24 +107,25 @@ trait ObjectTokenFilterBuilder { parent =>
         }
       }
 
-    def next(stream: Stream[F, JsonToken], path: List[TokenFilter.Direction], toTargetPath: List[TokenFilter.Direction], fromTargetPath: List[TokenFilter.Direction]): Pull[F, JsonToken, Unit] =
+    def next(stream: Stream[F, JsonToken], dropping: Boolean, path: List[TokenFilter.Direction], toTargetPath: List[TokenFilter.Direction], fromTargetPath: List[TokenFilter.Direction]): Pull[F, JsonToken, Unit] =
       stream.pull.unconsChunk.flatMap {
         case Some((jsonTokens, rest)) =>
-          val state = findDropRanges(jsonTokens, 0, 0, State(Vector.empty, path, toTargetPath, fromTargetPath))
-          val output = if (state.dropRanges.isEmpty) {
-            Pull.outputChunk(jsonTokens)
+          val state = findDropRanges(jsonTokens, 0, 0, State(dropping, Vector.empty, path, toTargetPath, fromTargetPath))
+          if (state.dropRanges.isEmpty) {
+            Pull.outputChunk(jsonTokens) >> next(rest, state.dropping, state.path, state.toTargetPath, state.fromTargetPath)
+          } else if (state.dropRanges.contains((0, jsonTokens.size))) {
+            Pull.suspend(next(rest, state.dropping, state.path, state.toTargetPath, state.fromTargetPath))
           } else {
             val (_, lastChunk, result) = state.dropRanges.foldLeft((0, jsonTokens, Segment.empty[JsonToken])) {
               case ((pos, remaining, acc), (dropStart, dropEnd)) =>
                 (dropEnd, remaining.drop(dropEnd - pos), acc ++ Segment.chunk(remaining.take(dropStart - pos)))
             }
-            Pull.output(result ++ Segment.chunk(lastChunk))
+            Pull.output(result ++ Segment.chunk(lastChunk)) >> next(rest, state.dropping, state.path, state.toTargetPath, state.fromTargetPath)
           }
-          output >> next(rest, state.path, state.toTargetPath, state.fromTargetPath)
         case None => Pull.done
       }
 
-    next(_, Nil, targetDirection.reverse, Nil).stream
+    next(_, dropping = false, Nil, targetDirection.reverse, Nil).stream
   }
 }
 
