@@ -17,15 +17,9 @@ object TokenFilter extends TokenFilterBuilder {
 
 }
 
-trait TokenFilterBuilder { parent =>
+trait ObjectTokenFilterBuilder { parent =>
   def targetDirection: List[TokenFilter.Direction]
 
-  def downArray: TokenFilterBuilder = new TokenFilterBuilder {
-    override val targetDirection: List[TokenFilter.Direction] = TokenFilter.DownArray :: parent.targetDirection
-  }
-  def downObject: TokenFilterBuilder = new TokenFilterBuilder {
-    override val targetDirection: List[TokenFilter.Direction] = TokenFilter.DownObject :: parent.targetDirection
-  }
   def downField(objectField: ObjectField): TokenFilterBuilder = new TokenFilterBuilder {
     override val targetDirection: List[TokenFilter.Direction] = TokenFilter.DownField(objectField) :: parent.targetDirection
   }
@@ -126,6 +120,17 @@ trait TokenFilterBuilder { parent =>
       }
 
     next(_, Nil, targetDirection.reverse, Nil).stream
+  }
+}
+
+trait TokenFilterBuilder { parent =>
+  def targetDirection: List[TokenFilter.Direction]
+
+  def downArray: TokenFilterBuilder = new TokenFilterBuilder {
+    override val targetDirection: List[TokenFilter.Direction] = TokenFilter.DownArray :: parent.targetDirection
+  }
+  def downObject: ObjectTokenFilterBuilder = new ObjectTokenFilterBuilder {
+    override val targetDirection: List[TokenFilter.Direction] = TokenFilter.DownObject :: parent.targetDirection
   }
 
 }
