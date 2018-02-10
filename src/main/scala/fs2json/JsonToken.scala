@@ -4,8 +4,10 @@ import fs2.Chunk
 
 import scala.language.higherKinds
 
-sealed trait JsonToken {
+sealed trait JsonToken extends Product {
   def value: Chunk.Bytes
+
+  override def toString: String = s"$productPrefix(${new String(value.toArray)})"
 }
 
 case object ObjectStart extends JsonToken { val value = Chunk.Bytes(Array[Byte]('{')) }

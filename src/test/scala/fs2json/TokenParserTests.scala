@@ -117,5 +117,106 @@ object TokenParserTests extends TestSuite {
       }
 
     }
+
+    "TokenFilter" - {
+      "dropping fields" - {
+        val jsonString =
+          """[
+            |{"foo" : {
+            |  "a": { "1": 1, "2" : true, "3" : 3 },
+            |  "b": { "1": 1, "2" : true, "3" : 3 },
+            |},
+            |"bar" : {
+            |  "a": { "1": 1, "2" : true, "3" : 3 },
+            |  "b": { "1": 1, "2" : true, "3" : 3 },
+            |}
+            |},
+            |{"foo" : {
+            |  "a": { "1": 1, "2" : true, "3" : 3 },
+            |  "b": { "1": 1, "2" : true, "3" : 3 },
+            |},
+            |"bar" : {
+            |  "a": { "1": 1, "2" : true, "3" : 3 },
+            |  "b": { "1": 1, "2" : true, "3" : 3 },
+            |}
+            |}
+            |]
+          """.stripMargin
+
+        "high level" - {
+          val result = Stream
+            .emit(jsonString)
+            .through(text.utf8Encode)
+            .through(tokenParser)
+            .through(TokenFilter.downArray.downObject.downField("foo").downObject.removeField("a"))
+            .through(prettyPrinter(JsonStyle.SemiPretty(3)))
+            .through(text.utf8Decode)
+            .covary[IO]
+            .compile
+            .foldMonoid
+            .unsafeRunSync()
+
+          assert(result == """[
+                             |  {
+                             |    "foo": {
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    },
+                             |    "bar": {
+                             |      "a": {"1":1,"2":true,"3":3},
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    }
+                             |  },
+                             |  {
+                             |    "foo": {
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    },
+                             |    "bar": {
+                             |      "a": {"1":1,"2":true,"3":3},
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    }
+                             |  }
+                             |]""".stripMargin)
+
+        }
+
+        "single value" - {
+          val result = Stream
+            .emit(jsonString)
+            .through(text.utf8Encode)
+            .through(tokenParser)
+            .through(TokenFilter.downArray.downObject.downField("foo").downObject.downField("a").downObject.removeField("2"))
+            .through(prettyPrinter(JsonStyle.SemiPretty(3)))
+            .through(text.utf8Decode)
+            .covary[IO]
+            .compile
+            .foldMonoid
+            .unsafeRunSync()
+
+          assert(result == """[
+                             |  {
+                             |    "foo": {
+                             |      "a": {"1":1,"3":3},
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    },
+                             |    "bar": {
+                             |      "a": {"1":1,"2":true,"3":3},
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    }
+                             |  },
+                             |  {
+                             |    "foo": {
+                             |      "a": {"1":1,"3":3},
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    },
+                             |    "bar": {
+                             |      "a": {"1":1,"2":true,"3":3},
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    }
+                             |  }
+                             |]""".stripMargin)
+
+        }
+      }
+    }
   }
 }

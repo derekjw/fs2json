@@ -68,7 +68,7 @@ package object fs2json {
             if (stateStack.headOption.contains(InObject)) {
               val endPos = findStringEnd(pos + 1, byteArray)
               if (endPos < byteArray.length) {
-                parse(endPos, byteArray, output :+ ObjectField(Chunk.Bytes(byteArray, pos, endPos - pos)), InObjectField ::stateStack)
+                parse(endPos, byteArray, output :+ ObjectField(Chunk.Bytes(byteArray, pos, endPos - pos)), InObjectField :: stateStack)
               } else {
                 ParserState(output, Chunk.bytes(byteArray, pos, byteArray.length - pos), stateStack)
               }
