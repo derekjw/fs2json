@@ -1,3 +1,5 @@
+organization := "com.github.derekjw"
+
 name := "fs2json"
 
 version := "0.1"
