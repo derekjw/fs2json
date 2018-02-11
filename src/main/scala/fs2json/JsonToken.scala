@@ -23,7 +23,15 @@ case object ArrayEnd extends JsonToken { val value = Chunk.Bytes(Array[Byte](']'
 
 // TODO: add decode methods for string and number
 case class JsonString(value: Chunk.Bytes) extends JsonToken
+object JsonString {
+  def fromString(str: String) = JsonString(Chunk.Bytes(s""""$str"""".getBytes("UTF-8")))
+}
+
 case class JsonNumber(value: Chunk.Bytes) extends JsonToken
+object JsonNumber {
+  def fromString(str: String) = JsonString(Chunk.Bytes(str.getBytes("UTF-8")))
+}
+
 case object JsonTrue extends JsonToken { val value = Chunk.Bytes(Array[Byte]('t', 'r', 'u', 'e')) }
 case object JsonFalse extends JsonToken { val value = Chunk.Bytes(Array[Byte]('f', 'a', 'l', 's', 'e')) }
 case object JsonNull extends JsonToken { val value = Chunk.Bytes(Array[Byte]('n', 'u', 'l', 'l')) }

@@ -119,30 +119,30 @@ object TokenParserTests extends TestSuite {
     }
 
     "TokenFilter" - {
-      "dropping fields" - {
-        val jsonString =
-          """[
-            |{"foo" : {
-            |  "a": { "1": 1, "2" : true, "3" : 3 },
-            |  "b": { "1": 1, "2" : true, "3" : 3 },
-            |},
-            |"bar" : {
-            |  "a": { "1": 1, "2" : true, "3" : 3 },
-            |  "b": { "1": 1, "2" : true, "3" : 3 },
-            |}
-            |},
-            |{"foo" : {
-            |  "a": { "1": 1, "2" : true, "3" : 3 },
-            |  "b": { "1": 1, "2" : true, "3" : 3 },
-            |},
-            |"bar" : {
-            |  "a": { "1": 1, "2" : true, "3" : 3 },
-            |  "b": { "1": 1, "2" : true, "3" : 3 },
-            |}
-            |}
-            |]
-          """.stripMargin
+      val jsonString =
+        """[
+          |{"foo" : {
+          |  "a": { "1": 1, "2" : true, "3" : 3 },
+          |  "b": { "1": 1, "2" : true, "3" : 3 },
+          |},
+          |"bar" : {
+          |  "a": { "1": 1, "2" : true, "3" : 3 },
+          |  "b": { "1": 1, "2" : true, "3" : 3 },
+          |}
+          |},
+          |{"foo" : {
+          |  "a": { "1": 1, "2" : true, "3" : 3 },
+          |  "b": { "1": 1, "2" : true, "3" : 3 },
+          |},
+          |"bar" : {
+          |  "a": { "1": 1, "2" : true, "3" : 3 },
+          |  "b": { "1": 1, "2" : true, "3" : 3 },
+          |}
+          |}
+          |]
+        """.stripMargin
 
+      "dropping fields" - {
         "high level" - {
           val result = Stream
             .emit(jsonString)
@@ -282,6 +282,101 @@ object TokenParserTests extends TestSuite {
                              |  {
                              |    "foo": {
                              |      "a": {"1":1},
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    },
+                             |    "bar": {
+                             |      "a": {"1":1,"2":true,"3":3},
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    }
+                             |  }
+                             |]""".stripMargin)
+
+        }
+      }
+
+      "inserting fields" - {
+        "simple values" - {
+
+          val insertStream = Stream.emits(Seq(
+            Stream.emit(JsonTrue),
+            Stream.emit(JsonFalse)
+          ))
+
+
+          val result = Stream
+            .emit(jsonString)
+            .through(text.utf8Encode)
+            .through(tokenParser)
+            .through2(insertStream)(TokenFilter.downArray.downObject.downField("foo").downObject.insertField("c"))
+            .through(prettyPrinter(JsonStyle.SemiPretty(3)))
+            .through(text.utf8Decode)
+            .covary[IO]
+            .compile
+            .foldMonoid
+            .unsafeRunSync()
+
+          assert(result == """[
+                             |  {
+                             |    "foo": {
+                             |      "c": true,
+                             |      "a": {"1":1,"2":true,"3":3},
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    },
+                             |    "bar": {
+                             |      "a": {"1":1,"2":true,"3":3},
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    }
+                             |  },
+                             |  {
+                             |    "foo": {
+                             |      "c": false,
+                             |      "a": {"1":1,"2":true,"3":3},
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    },
+                             |    "bar": {
+                             |      "a": {"1":1,"2":true,"3":3},
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    }
+                             |  }
+                             |]""".stripMargin)
+
+        }
+
+        "complex" - {
+
+          val insertStream = Stream.emits(Seq(
+            Stream.emits(Seq(ObjectStart, ObjectField.fromString("t"), JsonTrue, ObjectEnd)),
+            Stream.emits(Seq(ArrayStart, JsonNumber.fromString("10"), JsonNumber.fromString("20"), ArrayEnd))
+          ))
+
+          val result = Stream
+            .emit(jsonString)
+            .through(text.utf8Encode)
+            .through(tokenParser)
+            .through2(insertStream)(TokenFilter.downArray.downObject.downField("foo").downObject.insertField("c"))
+            .through(prettyPrinter(JsonStyle.SemiPretty(3)))
+            .through(text.utf8Decode)
+            .covary[IO]
+            .compile
+            .foldMonoid
+            .unsafeRunSync()
+
+          assert(result == """[
+                             |  {
+                             |    "foo": {
+                             |      "c": {"t":true},
+                             |      "a": {"1":1,"2":true,"3":3},
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    },
+                             |    "bar": {
+                             |      "a": {"1":1,"2":true,"3":3},
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    }
+                             |  },
+                             |  {
+                             |    "foo": {
+                             |      "c": [10,20],
+                             |      "a": {"1":1,"2":true,"3":3},
                              |      "b": {"1":1,"2":true,"3":3}
                              |    },
                              |    "bar": {
