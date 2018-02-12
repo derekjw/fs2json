@@ -4,9 +4,35 @@ import cats.effect.IO
 import fs2.{Stream, text}
 import utest._
 import cats.implicits._
+import io.circe.{Json, JsonObject}
+import io.circe.parser.parse
+import io.circe.testing.instances._
+import io.circe.syntax._
+import org.scalacheck.Prop.forAll
 
-object TokenParserTests extends TestSuite {
+object TokenParserTests extends TestSuite with UTestScalaCheck {
   val tests = Tests {
+    "round trip" - {
+      def roundTrip(json: Json): Json =
+        Stream.emit(json.noSpaces)
+          .through(text.utf8Encode)
+          .through(tokenParser)
+          .through(prettyPrinter())
+          .through(text.utf8Decode)
+          .covary[IO]
+          .compile
+          .foldMonoid
+          .map(parse)
+          .map(_.valueOr(throw _))
+          .unsafeRunSync
+
+      "json object" -
+        forAll { (jsonObject: JsonObject) =>
+          val json = jsonObject.asJson
+          roundTrip(json) == json
+        }.checkUTest()
+    }
+
     "should tokenize bad json stream and pretty print results" - {
       val jsonString =
         """
