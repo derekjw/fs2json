@@ -387,6 +387,51 @@ object TokenParserTests extends TestSuite {
                              |]""".stripMargin)
 
         }
+
+        "early termination" - {
+
+          val insertStream = Stream.emits(Seq(
+            Stream.emit(JsonTrue)
+          ))
+
+
+          val result = Stream
+            .emit(jsonString)
+            .through(text.utf8Encode)
+            .through(tokenParser)
+            .through2(insertStream)(TokenFilter.downArray.downObject.downField("foo").downObject.insertField("c"))
+            .through(prettyPrinter(JsonStyle.SemiPretty(3)))
+            .through(text.utf8Decode)
+            .covary[IO]
+            .compile
+            .foldMonoid
+            .unsafeRunSync()
+
+          assert(result == """[
+                             |  {
+                             |    "foo": {
+                             |      "c": true,
+                             |      "a": {"1":1,"2":true,"3":3},
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    },
+                             |    "bar": {
+                             |      "a": {"1":1,"2":true,"3":3},
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    }
+                             |  },
+                             |  {
+                             |    "foo": {
+                             |      "a": {"1":1,"2":true,"3":3},
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    },
+                             |    "bar": {
+                             |      "a": {"1":1,"2":true,"3":3},
+                             |      "b": {"1":1,"2":true,"3":3}
+                             |    }
+                             |  }
+                             |]""".stripMargin)
+
+        }
       }
     }
   }
