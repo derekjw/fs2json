@@ -13,7 +13,7 @@ import org.scalacheck.Prop.forAll
 object TokenParserTests extends TestSuite with UTestScalaCheck {
   val tests = Tests {
     "round trip" - {
-      def roundTrip(json: Json): Json =
+      def roundTrip(json: Json, style: JsonStyle = JsonStyle.NoSpaces): Json =
         Stream.emit(json.noSpaces)
           .through(text.utf8Encode)
           .through(tokenParser)
@@ -26,11 +26,19 @@ object TokenParserTests extends TestSuite with UTestScalaCheck {
           .map(_.valueOr(throw _))
           .unsafeRunSync
 
-      "json object" -
-        forAll { (jsonObject: JsonObject) =>
-          val json = jsonObject.asJson
-          roundTrip(json) == json
-        }.checkUTest()
+      "json object" - {
+        "pretty printed" -
+          forAll { (jsonObject: JsonObject) =>
+            val json = jsonObject.asJson
+            roundTrip(json, JsonStyle.Pretty) == json
+          }.checkUTest()
+
+        "noSpaces printed" -
+          forAll { (jsonObject: JsonObject) =>
+            val json = jsonObject.asJson
+            roundTrip(json, JsonStyle.NoSpaces) == json
+          }.checkUTest()
+      }
     }
 
     "should tokenize bad json stream and pretty print results" - {
