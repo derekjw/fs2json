@@ -1,5 +1,6 @@
 import fs2._
 
+import java.nio.ByteBuffer
 import scala.annotation.{switch, tailrec}
 import scala.collection.immutable.IntMap
 import scala.language.higherKinds
@@ -127,7 +128,7 @@ package object fs2json {
   def valueStreamToArray[F[_]]: fs2.Pipe[F, JsonToken, JsonToken] = Stream.emit(ArrayStart) ++ _ ++ Stream.emit(ArrayEnd)
 
   def prettyPrinter[F[_]](jsonStyle: JsonStyle = JsonStyle.NoSpaces): fs2.Pipe[F, JsonToken, Byte] = { stream =>
-    case class State(output: Catenable[Chunk.Bytes], lastToken: Option[JsonToken] = None, level: Int = 0)
+    case class State(output: Vector[Chunk.Bytes], lastToken: Option[JsonToken] = None, level: Int = 0)
 
     val space = Chunk.Bytes(Array[Byte](' '))
     val colon = Chunk.Bytes(Array[Byte](':'))
@@ -144,14 +145,14 @@ package object fs2json {
         chunk
     }
 
-    def indent(output: Catenable[Chunk.Bytes], level: Int, endToken: Boolean): Catenable[Chunk.Bytes] = jsonStyle match {
+    def indent(output: Vector[Chunk.Bytes], level: Int, endToken: Boolean): Vector[Chunk.Bytes] = jsonStyle match {
       case JsonStyle.Pretty => output :+ getIndent(if (endToken) level - 1 else level)
       case JsonStyle.SemiPretty(levelLimit) if level <= levelLimit => output :+ getIndent(if (endToken) level - 1 else level)
       case _ if level == 0 => output :+ getIndent(0) // value stream, always new line
       case _ => output
     }
 
-    def fieldSpace(output: Catenable[Chunk.Bytes], level: Int): Catenable[Chunk.Bytes] = jsonStyle match {
+    def fieldSpace(output: Vector[Chunk.Bytes], level: Int): Vector[Chunk.Bytes] = jsonStyle match {
       case JsonStyle.Pretty => output :+ space
       case JsonStyle.SemiPretty(levelLimit) if level <= levelLimit => output :+ space
       case _ => output
@@ -186,9 +187,15 @@ package object fs2json {
     def next(stream: fs2.Stream[F, JsonToken], lastToken: Option[JsonToken] = None, level: Int = 0): fs2.Pull[F, Byte, Unit] = {
       stream.pull.unconsChunk.flatMap {
         case Some((tokens, rest)) =>
-          val state = tokens.foldLeft(State(Catenable.empty, lastToken, level))(processToken)
-          val compacted = Segment.catenatedChunks(state.output).force.toChunk
-          Pull.output(Segment.chunk(compacted)) >> next(rest, state.lastToken, state.level)
+          val state = tokens.foldLeft(State(Vector.empty, lastToken, level))(processToken)
+          val outputSize = state.output.foldLeft(0)(_ + _.size)
+          val outputBuffer = ByteBuffer.allocate(outputSize)
+          state.output.foreach { chunk =>
+            outputBuffer.put(chunk.toByteBuffer)
+          }
+          outputBuffer.flip()
+          val compacted = Chunk.byteBuffer(outputBuffer)
+          Pull.outputChunk(compacted) >> next(rest, state.lastToken, state.level)
         case None => fs2.Pull.done
       }
     }
