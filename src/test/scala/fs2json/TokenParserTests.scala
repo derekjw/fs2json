@@ -17,7 +17,7 @@ object TokenParserTests extends TestSuite with UTestScalaCheck {
         Stream.emit(json.noSpaces)
           .through(text.utf8Encode)
           .through(tokenParser)
-          .through(prettyPrinter())
+          .through(prettyPrinter(style))
           .through(text.utf8Decode)
           .covary[IO]
           .compile
