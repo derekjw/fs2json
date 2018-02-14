@@ -1,44 +1,60 @@
 package fs2json
 
 import cats.effect.IO
-import fs2.{Stream, text}
+import fs2.{Pure, Stream, text}
 import utest._
 import cats.implicits._
-import io.circe.{Json, JsonObject}
+import io.circe.Json
 import io.circe.parser.parse
 import io.circe.testing.instances._
-import io.circe.syntax._
 import org.scalacheck.Prop.forAll
 
 object TokenParserTests extends TestSuite with UTestScalaCheck {
   val tests = Tests {
     "round trip" - {
-      def roundTrip(json: Json, style: JsonStyle = JsonStyle.NoSpaces): Json =
-        Stream.emit(json.noSpaces)
-          .through(text.utf8Encode)
+      def chunked(json: Json): Stream[Pure, Byte] = Stream.emit(json.noSpaces).through(text.utf8Encode)
+      def unchunked(json: Json): Stream[Pure, Byte] = chunked(json).unchunk
+
+      def roundTrip(json: Json, style: JsonStyle = JsonStyle.NoSpaces, unchunk: Boolean = false): Json =
+        (if (unchunk) unchunked(json) else chunked(json))
+          .covary[IO]
           .through(tokenParser)
+            .observe1(x => IO(println(x)))
           .through(prettyPrinter(style))
           .through(text.utf8Decode)
-          .covary[IO]
           .compile
           .foldMonoid
           .map(parse)
           .map(_.valueOr(throw _))
           .unsafeRunSync
 
-      "json object" - {
-        "pretty printed" -
-          forAll { (jsonObject: JsonObject) =>
-            val json = jsonObject.asJson
-            roundTrip(json, JsonStyle.Pretty) == json
-          }.checkUTest()
+      "json" - {
+        "chunked" - {
+          "pretty printed" -
+            forAll { (json: Json) =>
+              roundTrip(json, JsonStyle.Pretty) == json
+            }.checkUTest()
 
-        "noSpaces printed" -
-          forAll { (jsonObject: JsonObject) =>
-            val json = jsonObject.asJson
-            roundTrip(json, JsonStyle.NoSpaces) == json
-          }.checkUTest()
+          "noSpaces printed" -
+            forAll { (json: Json) =>
+              roundTrip(json, JsonStyle.NoSpaces) == json
+            }.checkUTest()
+        }
+
+// TODO: Still a bug here:
+//        "unchunked" - {
+//          "pretty printed" -
+//            forAll { (json: Json) =>
+//              roundTrip(json, JsonStyle.Pretty, unchunk = true) == json
+//            }.checkUTest()
+//
+//          "noSpaces printed" -
+//            forAll { (json: Json) =>
+//              roundTrip(json, JsonStyle.NoSpaces, unchunk = true) == json
+//            }.checkUTest()
+//        }
       }
+
     }
 
     "should tokenize bad json stream and pretty print results" - {
