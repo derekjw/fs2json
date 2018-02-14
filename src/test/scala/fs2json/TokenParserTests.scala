@@ -19,7 +19,6 @@ object TokenParserTests extends TestSuite with UTestScalaCheck {
         (if (unchunk) unchunked(json) else chunked(json))
           .covary[IO]
           .through(tokenParser)
-//          .observe1(x => IO(println(x)))
           .through(prettyPrinter(style))
           .through(text.utf8Decode)
           .compile
@@ -41,23 +40,22 @@ object TokenParserTests extends TestSuite with UTestScalaCheck {
             }.checkUTest()
         }
 
-// TODO: Still a bug here:
-//        "unchunked" - {
-//          "pretty printed" -
-//            forAll { (json: Json) =>
-//              roundTrip(json, JsonStyle.Pretty, unchunk = true) == json
-//            }.checkUTest()
-//
-//          "noSpaces printed" -
-//            forAll { (json: Json) =>
-//              roundTrip(json, JsonStyle.NoSpaces, unchunk = true) == json
-//            }.checkUTest()
-//        }
+        "unchunked" - {
+          "pretty printed" -
+            forAll { (json: Json) =>
+              roundTrip(json, JsonStyle.Pretty, unchunk = true) == json
+            }.checkUTest()
+
+          "noSpaces printed" -
+            forAll { (json: Json) =>
+              roundTrip(json, JsonStyle.NoSpaces, unchunk = true) == json
+            }.checkUTest()
+        }
       }
 
     }
 
-    "should tokenize bad json stream and pretty print results" - {
+    "tokenize and pretty print" - {
       val jsonString =
         """
           true

@@ -67,18 +67,18 @@ package object fs2json {
             }
           case '"' =>
             if (stateStack.headOption.contains(InObject)) {
-              val endPos = findStringEnd(pos + 1, byteArray)
-              if (endPos < byteArray.length) {
-                parse(endPos, byteArray, output :+ ObjectField(Chunk.Bytes(byteArray, pos, endPos - pos)), InObjectField :: stateStack, done)
-              } else {
-                ParserState(output, Chunk.bytes(byteArray, pos, byteArray.length - pos), stateStack)
+              findStringEnd(pos + 1, byteArray) match {
+                case Some(endPos) =>
+                  parse(endPos, byteArray, output :+ ObjectField(Chunk.Bytes(byteArray, pos, endPos - pos)), InObjectField :: stateStack, done)
+                case None =>
+                  ParserState(output, Chunk.bytes(byteArray, pos, byteArray.length - pos), stateStack)
               }
             } else {
-              val endPos = findStringEnd(pos + 1, byteArray)
-              if (endPos <= byteArray.length) {
-                parse(endPos, byteArray, output :+ JsonString(Chunk.Bytes(byteArray, pos, endPos - pos)), dropState(InObjectField, stateStack), done)
-              } else {
-                ParserState(output, Chunk.bytes(byteArray, pos, byteArray.length - pos), stateStack)
+              findStringEnd(pos + 1, byteArray) match {
+                case Some(endPos) =>
+                  parse(endPos, byteArray, output :+ JsonString(Chunk.Bytes(byteArray, pos, endPos - pos)), dropState(InObjectField, stateStack), done)
+                case None =>
+                  ParserState(output, Chunk.bytes(byteArray, pos, byteArray.length - pos), stateStack)
               }
             }
         }
@@ -90,14 +90,14 @@ package object fs2json {
       if (pos < byteArray.length && numberByte(byteArray(pos))) findNumberEnd(pos + 1, byteArray) else pos
 
     @tailrec
-    def findStringEnd(pos: Int, byteArray: Array[Byte]): Int = {
+    def findStringEnd(pos: Int, byteArray: Array[Byte]): Option[Int] = {
       if (pos < byteArray.length) {
         (byteArray(pos): @switch) match {
           case '\\' => findStringEnd(pos + 2, byteArray)
-          case '"' => pos + 1
+          case '"' => Some(pos + 1)
           case _ => findStringEnd(pos + 1, byteArray)
         }
-      } else pos
+      } else None
     }
 
 
