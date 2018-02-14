@@ -468,5 +468,12 @@ object TokenParserTests extends TestSuite with UTestScalaCheck {
         }
       }
     }
+
+    // for code coverage
+    "JsonTokens" - {
+      "toString" - {
+        assert(JsonString.fromString("foo").toString == "JsonString(\"foo\")")
+      }
+    }
   }
 }
