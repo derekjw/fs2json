@@ -19,7 +19,7 @@ object TokenParserTests extends TestSuite with UTestScalaCheck {
         (if (unchunk) unchunked(json) else chunked(json))
           .covary[IO]
           .through(tokenParser)
-            .observe1(x => IO(println(x)))
+//          .observe1(x => IO(println(x)))
           .through(prettyPrinter(style))
           .through(text.utf8Decode)
           .compile
