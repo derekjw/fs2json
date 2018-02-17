@@ -4,16 +4,10 @@ name := "fs2json"
 
 scalaVersion := "2.12.4"
 
-libraryDependencies ++= Seq(
-  "co.fs2" %% "fs2-core" % "0.10.0",
-  "com.lihaoyi" %% "utest" % "0.5.3" % Test,
-)
+lazy val fs2json = project in file(".") aggregate (core, jawn)
 
-libraryDependencies ++= Seq(
-  "circe-core",
-  "circe-generic",
-  "circe-parser",
-  "circe-testing"
-).map("io.circe" %% _ % "0.9.1" % Test)
+lazy val core = project in file("core")
 
-testFrameworks += new TestFramework("utest.runner.Framework")
+lazy val jawn = project in file("jawn") dependsOn core
+
+Release.settings
