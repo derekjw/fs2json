@@ -12,7 +12,7 @@ object JawnParserTest extends TestSuite with UTestScalaCheck {
     def roundTrip(json: Json): Vector[Json] =
       Stream.emit(json.noSpaces).through(text.utf8Encode)
         .through(tokenParser)
-        .through(JawnParser.valueStream)
+        .through(jawn.valueStream)
         .toVector
 
     "for all json" - {

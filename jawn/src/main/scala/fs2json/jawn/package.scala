@@ -2,16 +2,13 @@ package fs2json
 
 import java.nio.ByteBuffer
 
-import fs2._
-import jawn.{ByteBufferParser, FContext, Facade}
+import fs2.{Pipe, Pull, Segment, Stream}
+import _root_.jawn.{FContext, Facade, ByteBufferParser}
 
 import scala.annotation.switch
 import scala.language.higherKinds
 
-case class JawnParserFailure(message: String, cause: Option[Throwable] = None) extends RuntimeException(message, cause.orNull)
-
-object JawnParser {
-
+package object jawn {
   def valueStream[F[_], J](implicit facade: Facade[J]): Pipe[F, JsonToken, J] = {
     case class State(output: Vector[J], stack: List[FContext[J]])
 
