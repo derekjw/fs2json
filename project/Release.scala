@@ -1,7 +1,5 @@
 import sbt._
 import sbt.Keys._
-import sbtrelease.ReleasePlugin.autoImport._
-import sbtrelease.ReleaseStateTransformations._
 
 object Release {
   val settings = Seq(
@@ -37,22 +35,6 @@ object Release {
         Some("releases" at nexus + "service/local/staging/deploy/maven2")
     },
 
-    publishArtifact in Test := false,
-
-    releaseCrossBuild := true, // true if you cross-build the project for multiple Scala versions
-    releaseProcess := Seq[ReleaseStep](
-      checkSnapshotDependencies,
-      inquireVersions,
-      runClean,
-      runTest,
-      setReleaseVersion,
-      commitReleaseVersion,
-      tagRelease,
-      releaseStepCommand("publishSigned"),
-      setNextVersion,
-      commitNextVersion,
-      releaseStepCommand("sonatypeReleaseAll"),
-      pushChanges
-    )
+    publishArtifact in Test := false
   )
 }
