@@ -17,7 +17,7 @@ Filters are included to add or remove fields from the stream.
 
 The token stream can be fed into a Jawn parser to transform into some Json AST, and a circe tokenizer for transforming a circe Json document to a stream of tokens.
 
-Until this library hits version 1.0, breaking changes are expected. There has also been little testing against malformed Json.
+Until this library hits version 1.0, breaking changes are expected and bugs are likely. There has also been little testing against malformed Json.
 
 ### SBT
 ```
