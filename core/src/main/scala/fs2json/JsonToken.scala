@@ -2,6 +2,8 @@ package fs2json
 
 import fs2.Chunk
 
+import scala.annotation.switch
+import scala.collection.mutable
 import scala.language.higherKinds
 
 sealed trait JsonToken extends Product {
@@ -15,7 +17,7 @@ case object ObjectEnd extends JsonToken { val value = Chunk.Bytes(Array[Byte]('}
 
 case class ObjectField(value: Chunk.Bytes) extends JsonToken
 object ObjectField {
-  def fromString(str: String) = ObjectField(Chunk.Bytes(s""""$str"""".getBytes("UTF-8")))
+  def fromString(str: String) = ObjectField(JsonString.fromString(str).value)
 }
 
 case object ArrayStart extends JsonToken { val value = Chunk.Bytes(Array[Byte]('['))}
@@ -24,7 +26,41 @@ case object ArrayEnd extends JsonToken { val value = Chunk.Bytes(Array[Byte](']'
 // TODO: add decode methods for string and number
 case class JsonString(value: Chunk.Bytes) extends JsonToken
 object JsonString {
-  def fromString(str: String) = JsonString(Chunk.Bytes(s""""$str"""".getBytes("UTF-8")))
+  def fromString(value: String): JsonString = {
+    // Based on circe printer code
+    val builder = new mutable.ArrayBuilder.ofByte
+
+    builder += '"'
+
+    var i = 0
+
+    while (i < value.length) {
+      val c = value.charAt(i)
+
+      if ((c == '"' || c == '\\' || c == '\b' || c == '\f' || c == '\n' || c == '\r' || c == '\t') || Character.isISOControl(c) || c.toInt > 127) {
+        builder += '\\'
+        (c: @switch) match {
+          case '"'  => builder += '"'
+          case '\\' => builder += '\\'
+          case '\b' => builder += 'b'
+          case '\f' => builder += 'f'
+          case '\n' => builder += 'n'
+          case '\r' => builder += 'r'
+          case '\t' => builder += 't'
+          case control =>
+            String.format("u%04x", Integer.valueOf(control.toInt)).foreach(builder += _.toByte)
+        }
+      } else {
+        builder += c.toByte
+      }
+
+      i += 1
+    }
+
+    builder += '"'
+
+    JsonString(Chunk.Bytes(builder.result()))
+  }
 }
 
 case class JsonNumber(value: Chunk.Bytes) extends JsonToken
