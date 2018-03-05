@@ -7,7 +7,6 @@ scalaVersion := "2.12.4"
 libraryDependencies ++= Seq(
   "io.circe" %% "circe-core" % "0.9.1",
   "io.circe" %% "circe-parser" % "0.9.1",
-  "org.spire-math" %% "jawn-parser" % "0.11.1",
   "com.lihaoyi" %% "utest" % "0.5.3" % Test,
 )
 

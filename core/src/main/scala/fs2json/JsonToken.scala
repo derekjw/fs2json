@@ -6,7 +6,7 @@ import scala.annotation.switch
 import scala.collection.mutable
 import scala.language.higherKinds
 
-sealed trait JsonToken extends Product {
+sealed trait JsonToken extends Product with Serializable {
   def value: Chunk.Bytes
 
   override def toString: String = s"$productPrefix(${new String(value.toArray)})"

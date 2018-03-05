@@ -5,7 +5,7 @@ name := "fs2json-core"
 scalaVersion := "2.12.4"
 
 libraryDependencies ++= Seq(
-  "co.fs2" %% "fs2-core" % "0.10.0",
+  "co.fs2" %% "fs2-core" % "0.10.2",
   "com.lihaoyi" %% "utest" % "0.5.3" % Test,
 )
 
