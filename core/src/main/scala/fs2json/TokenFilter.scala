@@ -112,7 +112,7 @@ trait ObjectTokenFilterBuilder { parent =>
             case Vector() =>
               Pull.outputChunk(jsonTokens) >> next(rest, state.dropping, state.offTarget, state.toTarget, state.onTarget)
             case Vector((0, dropEnd)) if dropEnd == jsonTokens.size =>
-              Pull.suspend(next(rest, state.dropping, state.offTarget, state.toTarget, state.onTarget))
+              next(rest, state.dropping, state.offTarget, state.toTarget, state.onTarget)
             case dropRanges =>
               val (_, lastChunk, result) = dropRanges.foldLeft((0, jsonTokens, Segment.empty[JsonToken])) {
                 case ((pos, remaining, acc), (dropStart, dropEnd)) =>
@@ -199,7 +199,7 @@ trait ObjectTokenFilterBuilder { parent =>
 
     def sendOutput(remaining: Chunk[JsonToken], pos: Int, insertPositions: Vector[Int], insertLeg: Stream.StepLeg[F, Stream[F, JsonToken]]): Pull[F, Stream[F, JsonToken], Option[Stream.StepLeg[F, Stream[F, JsonToken]]]] =
       insertPositions match {
-        case Vector() => Pull.output1(Stream.chunk(remaining).covary[F]).map(_ => Some(insertLeg))
+        case Vector() => sendNonEmpty(remaining).as(Some(insertLeg))
         case nextPos +: rest =>
           val (sendNow, sendLater) = remaining.splitAt(nextPos - pos)
           sendNonEmpty(sendNow) >> {
@@ -211,7 +211,7 @@ trait ObjectTokenFilterBuilder { parent =>
                   case Some(nextLeg) =>
                     sendOutput(sendLater, nextPos, insertPositions, nextLeg)
                   case None =>
-                    sendNonEmpty(sendLater).map(_ => None)
+                    sendNonEmpty(sendLater).as(None)
                 }
             }
           }
@@ -226,25 +226,19 @@ trait ObjectTokenFilterBuilder { parent =>
     def next(tokenLeg: Stream.StepLeg[F, JsonToken], maybeInsertStream: Option[Stream.StepLeg[F, Stream[F, JsonToken]]], offTarget: List[TokenFilter.Direction], toTarget: List[TokenFilter.Direction], onTarget: List[TokenFilter.Direction]): Pull[F, Stream[F, JsonToken], Unit] =
       maybeInsertStream match {
         case Some(insertLeg) =>
-          // TODO: use toChunks
-          val jsonTokens = tokenLeg.head.force.toChunk
-          val state = findInsertPositions(jsonTokens, 0, State(Vector.empty, offTarget, toTarget, onTarget))
-          if (state.insertPositions.isEmpty) {
-            Pull.output1(Stream.chunk(jsonTokens).covary[F]) >> tokenLeg.stepLeg.flatMap {
-              case Some(rest) =>
-                next(rest, Some(insertLeg), state.offTarget, state.toTarget, state.onTarget)
-              case None =>
-                Pull.done
-            }
-          } else {
-            sendOutput(jsonTokens, 0, state.insertPositions, insertLeg).flatMap { nextInsertStream =>
-              tokenLeg.stepLeg.flatMap {
-                case Some(rest) =>
-                  next(rest, nextInsertStream, state.offTarget, state.toTarget, state.onTarget)
-                case None =>
-                  Pull.done
+          tokenLeg.head.force.unconsChunk match {
+            case Right((jsonTokens, remaining)) =>
+              val state = findInsertPositions(jsonTokens, 0, State(Vector.empty, offTarget, toTarget, onTarget))
+              sendOutput(jsonTokens, 0, state.insertPositions, insertLeg).flatMap { nextInsertStream =>
+                tokenLeg.stepLeg.flatMap {
+                  case Some(rest) =>
+                    next(rest.setHead(remaining), nextInsertStream, state.offTarget, state.toTarget, state.onTarget)
+                  case None =>
+                    next(tokenLeg.setHead(remaining), nextInsertStream, state.offTarget, state.toTarget, state.onTarget)
+                }
               }
-            }
+            case Left(()) =>
+              Pull.done
           }
         case None => Pull.output1(Stream.segment(tokenLeg.head).covary[F]) >> Pull.output1(tokenLeg.stream)
       }
