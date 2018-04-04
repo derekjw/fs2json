@@ -205,11 +205,11 @@ trait ObjectTokenFilterBuilder { parent =>
           sendNonEmpty(sendNow) >> {
             insertLeg.head.force.uncons1 match {
               case Right((stream, restInsertStream)) =>
-                Pull.output1(stream.cons1(ObjectField.fromString(fieldName))) >> sendOutput(sendLater, pos + nextPos, rest, insertLeg.setHead(restInsertStream))
+                Pull.output1(stream.cons1(ObjectField.fromString(fieldName))) >> sendOutput(sendLater, nextPos, rest, insertLeg.setHead(restInsertStream))
               case Left(()) =>
                 insertLeg.stepLeg.flatMap {
                   case Some(nextLeg) =>
-                    sendOutput(sendLater, pos + nextPos, insertPositions, nextLeg)
+                    sendOutput(sendLater, nextPos, insertPositions, nextLeg)
                   case None =>
                     sendNonEmpty(sendLater).map(_ => None)
                 }
@@ -246,7 +246,7 @@ trait ObjectTokenFilterBuilder { parent =>
               }
             }
           }
-        case None => Pull.output1(tokenLeg.stream)
+        case None => Pull.output1(Stream.segment(tokenLeg.head).covary[F]) >> Pull.output1(tokenLeg.stream)
       }
 
     (s1, s2) =>
