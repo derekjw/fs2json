@@ -232,7 +232,7 @@ trait ObjectTokenFilterBuilder { parent =>
               sendOutput(jsonTokens, 0, state.insertPositions, insertLeg).flatMap { nextInsertStream =>
                 tokenLeg.stepLeg.flatMap {
                   case Some(rest) =>
-                    next(rest.setHead(remaining), nextInsertStream, state.offTarget, state.toTarget, state.onTarget)
+                    next(rest.setHead(remaining ++ rest.head), nextInsertStream, state.offTarget, state.toTarget, state.onTarget)
                   case None =>
                     next(tokenLeg.setHead(remaining), nextInsertStream, state.offTarget, state.toTarget, state.onTarget)
                 }
