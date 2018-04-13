@@ -244,7 +244,12 @@ trait ObjectTokenFilterBuilder { parent =>
                 }
               }
             case Left(()) =>
-              Pull.done
+              tokenLeg.stepLeg.flatMap {
+                case Some(rest) =>
+                  next(rest, maybeInsertsLeg, offTarget, toTarget, onTarget)
+                case None =>
+                  Pull.done
+              }
           }
         case None => Pull.output(tokenLeg.head) >> tokenLeg.stream.pull.echo
       }
