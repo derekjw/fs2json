@@ -2,13 +2,13 @@ import sbtrelease.ReleaseStateTransformations._
 
 name := "fs2json"
 
-lazy val fs2json = project in file(".") aggregate (core, jawn, circe)
+lazy val fs2json = (project in file(".")).aggregate(core, jawn, circe)
 
 lazy val core = project in file("core")
 
-lazy val jawn = project in file("jawn") dependsOn core
+lazy val jawn = (project in file("jawn")).dependsOn(core)
 
-lazy val circe = project in file("circe") dependsOn jawn
+lazy val circe = (project in file("circe")).dependsOn(jawn)
 
 Common.settings
 
