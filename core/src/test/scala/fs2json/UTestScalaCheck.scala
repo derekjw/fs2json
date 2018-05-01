@@ -1,6 +1,6 @@
 package fs2json
 
-import org.scalacheck.{Test, Prop}
+import org.scalacheck.{Prop, Test}
 import org.scalacheck.util.Pretty
 import utest._
 
@@ -16,9 +16,8 @@ trait UTestScalaCheck {
   }
 
   implicit protected[this] class PropWrapper(prop: Prop) {
-    def checkUTest(): Unit = {
+    def checkUTest(): Unit =
       prop.check(Test.Parameters.default.withTestCallback(UTestReporter))
-    }
   }
 
 }

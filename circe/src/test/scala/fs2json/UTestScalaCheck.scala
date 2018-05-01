@@ -16,9 +16,8 @@ trait UTestScalaCheck {
   }
 
   implicit protected[this] class PropWrapper(prop: Prop) {
-    def checkUTest(): Unit = {
+    def checkUTest(): Unit =
       prop.check(Test.Parameters.default.withTestCallback(UTestReporter))
-    }
   }
 
 }

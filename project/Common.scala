@@ -10,7 +10,16 @@ object Common {
   )
 
   val testSettings = Seq(
-    testFrameworks += new TestFramework("utest.runner.Framework")
+    testFrameworks += new TestFramework("utest.runner.Framework"),
+    libraryDependencies ++= Seq(
+      "com.lihaoyi" %% "utest" % "0.5.3" % Test
+    ) ++ Seq(
+      "circe-core",
+      "circe-generic",
+      "circe-parser",
+      "circe-testing",
+      "circe-literal"
+    ).map("io.circe" %% _ % "0.9.1" % Test)
   )
 
   val releaseSettings = Seq(
