@@ -44,7 +44,7 @@ package object fs2json {
       case _                                                       => output
     }
 
-    def formatOutput(token: JsonToken, state: State) = {
+    def formatOutput(token: JsonToken, state: State) =
       (token match {
         case ObjectEnd | ArrayEnd =>
           state.lastToken match {
@@ -60,7 +60,6 @@ package object fs2json {
             case _                              => indent(state.output :+ comma, state.level, endToken = false)
           }
       }) :+ token.value
-    }
 
     def processToken(state: State, token: JsonToken): State = {
       val nextLevel = token match {
@@ -71,7 +70,7 @@ package object fs2json {
       State(formatOutput(token, state), Some(token), nextLevel)
     }
 
-    def next(stream: fs2.Stream[F, JsonToken], lastToken: Option[JsonToken] = None, level: Int = 0): fs2.Pull[F, Byte, Unit] = {
+    def next(stream: fs2.Stream[F, JsonToken], lastToken: Option[JsonToken] = None, level: Int = 0): fs2.Pull[F, Byte, Unit] =
       stream.pull.uncons.flatMap {
         case Some((tokens, rest)) =>
           val state = tokens.fold(State(Vector.empty, lastToken, level))(processToken).force.run._2
@@ -85,7 +84,6 @@ package object fs2json {
           Pull.outputChunk(compacted) >> next(rest, state.lastToken, state.level)
         case None => fs2.Pull.done
       }
-    }
 
     next(stream).stream
   }

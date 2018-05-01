@@ -26,7 +26,7 @@ object TokenParser {
   }
 
   @tailrec
-  private def parse(pos: Int, byteArray: Array[Byte], output: Vector[JsonToken], stateStack: List[ContextState], done: Boolean): ParserState = {
+  private def parse(pos: Int, byteArray: Array[Byte], output: Vector[JsonToken], stateStack: List[ContextState], done: Boolean): ParserState =
     if (pos >= byteArray.length) {
       ParserState(output, Chunk.empty, stateStack)
     } else {
@@ -84,14 +84,13 @@ object TokenParser {
           }
       }
     }
-  }
 
   @tailrec
   private def findNumberEnd(pos: Int, byteArray: Array[Byte]): Int =
     if (pos < byteArray.length && numberByte(byteArray(pos))) findNumberEnd(pos + 1, byteArray) else pos
 
   @tailrec
-  private def findStringEnd(pos: Int, byteArray: Array[Byte]): Option[Int] = {
+  private def findStringEnd(pos: Int, byteArray: Array[Byte]): Option[Int] =
     if (pos < byteArray.length) {
       (byteArray(pos): @switch) match {
         case '\\' => findStringEnd(pos + 2, byteArray)
@@ -99,7 +98,6 @@ object TokenParser {
         case _    => findStringEnd(pos + 1, byteArray)
       }
     } else None
-  }
 
   private case class ParserState(output: Vector[JsonToken], buffer: Chunk[Byte], stateStack: List[ContextState])
 
@@ -111,7 +109,7 @@ object TokenParser {
   private def processRemaining(parserState: ParserState): ParserState =
     parse(0, parserState.buffer.toArray, parserState.output, parserState.stateStack, done = true)
 
-  private def next[F[_]](buffer: Chunk[Byte], stream: Stream[F, Chunk[Byte]], stateStack: List[ContextState]): Pull[F, JsonToken, Unit] = {
+  private def next[F[_]](buffer: Chunk[Byte], stream: Stream[F, Chunk[Byte]], stateStack: List[ContextState]): Pull[F, JsonToken, Unit] =
     stream.pull.unconsChunk.flatMap {
       case Some((byteChunks, rest)) =>
         val parserState = byteChunks.foldLeft(ParserState(Vector.empty, buffer, stateStack))(processSingleChunk)
@@ -129,6 +127,5 @@ object TokenParser {
           Pull.done
         }
     }
-  }
 
 }

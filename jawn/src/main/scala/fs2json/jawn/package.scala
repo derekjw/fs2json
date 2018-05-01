@@ -3,7 +3,7 @@ package fs2json
 import java.nio.ByteBuffer
 
 import fs2.{Pipe, Pull, Segment, Stream}
-import _root_.jawn.{FContext, Facade, ByteBufferParser}
+import _root_.jawn.{ByteBufferParser, FContext, Facade}
 
 import scala.annotation.switch
 import scala.language.higherKinds
@@ -71,7 +71,7 @@ package object jawn {
         }
     }
 
-    def next(stream: Stream[F, JsonToken], stack: List[FContext[J]]): Pull[F, J, Unit] = {
+    def next(stream: Stream[F, JsonToken], stack: List[FContext[J]]): Pull[F, J, Unit] =
       stream.pull.uncons.flatMap {
         case Some((jsonTokens, rest)) =>
           val state = jsonTokens.fold(State(Vector.empty, stack))(processToken).force.run._2
@@ -82,7 +82,6 @@ package object jawn {
           }
         case None => Pull.done // TODO: finish stack
       }
-    }
 
     next(_, Nil).stream
   }
