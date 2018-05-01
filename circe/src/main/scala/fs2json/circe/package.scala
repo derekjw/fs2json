@@ -7,7 +7,6 @@ import io.circe.syntax._
 
 import scala.language.higherKinds
 
-
 package object circe {
 
   def valueStream[F[_]]: Pipe[F, JsonToken, Json] = jawn.valueStream[F, Json]
@@ -29,9 +28,10 @@ package object circe {
       n => Segment.singleton(JsonNumber(Chunk.Bytes(n.asJson.noSpaces.getBytes("UTF-8")))),
       s => Segment.singleton(JsonString(Chunk.Bytes(s.asJson.noSpaces.getBytes("UTF-8")))),
       a => Segment.singleton(ArrayStart) ++ Segment.seq(a).flatMap(jsonToTokens).mapResult(_ => ()) ++ Segment.singleton(ArrayEnd),
-      o => Segment.singleton(ObjectStart) ++
-        Segment.seq(o.toVector).flatMap(kv =>
-          Segment.singleton(ObjectField(Chunk.Bytes(Json.fromString(kv._1).noSpaces.getBytes("UTF-8")))) ++ jsonToTokens(kv._2)).mapResult(_ => ()) ++
-        Segment.singleton(ObjectEnd))
+      o =>
+        Segment.singleton(ObjectStart) ++
+          Segment.seq(o.toVector).flatMap(kv => Segment.singleton(ObjectField(Chunk.Bytes(Json.fromString(kv._1).noSpaces.getBytes("UTF-8")))) ++ jsonToTokens(kv._2)).mapResult(_ => ()) ++
+          Segment.singleton(ObjectEnd)
+    )
 
 }

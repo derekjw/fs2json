@@ -1,8 +1,4 @@
-organization := "com.github.derekjw"
-
 name := "fs2json-jawn"
-
-scalaVersion := "2.12.4"
 
 libraryDependencies ++= Seq(
   "org.spire-math" %% "jawn-parser" % "0.11.1",
@@ -17,6 +13,4 @@ libraryDependencies ++= Seq(
   "circe-literal"
 ).map("io.circe" %% _ % "0.9.1" % Test)
 
-testFrameworks += new TestFramework("utest.runner.Framework")
-
-Release.settings
+Common.settings

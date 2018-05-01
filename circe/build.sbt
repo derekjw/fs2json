@@ -1,8 +1,4 @@
-organization := "com.github.derekjw"
-
 name := "fs2json-circe"
-
-scalaVersion := "2.12.4"
 
 libraryDependencies ++= Seq(
   "io.circe" %% "circe-core" % "0.9.1",
@@ -16,6 +12,4 @@ libraryDependencies ++= Seq(
   "circe-literal"
 ).map("io.circe" %% _ % "0.9.1" % Test)
 
-testFrameworks += new TestFramework("utest.runner.Framework")
-
-Release.settings
+Common.settings

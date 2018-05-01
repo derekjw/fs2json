@@ -22,7 +22,7 @@ object TokenParser {
 
   private def dropState(target: ContextState, stack: List[ContextState]): List[ContextState] = stack match {
     case `target` :: rest => rest
-    case other => other
+    case other            => other
   }
 
   @tailrec
@@ -95,8 +95,8 @@ object TokenParser {
     if (pos < byteArray.length) {
       (byteArray(pos): @switch) match {
         case '\\' => findStringEnd(pos + 2, byteArray)
-        case '"' => Some(pos + 1)
-        case _ => findStringEnd(pos + 1, byteArray)
+        case '"'  => Some(pos + 1)
+        case _    => findStringEnd(pos + 1, byteArray)
       }
     } else None
   }

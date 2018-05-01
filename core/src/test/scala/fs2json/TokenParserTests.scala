@@ -306,7 +306,8 @@ object TokenParserTests extends TestSuite with UTestScalaCheck {
         "unchunked" - {
           val result = Stream
             .emit(jsonString)
-            .through(text.utf8Encode).unchunk
+            .through(text.utf8Encode)
+            .unchunk
             .through(tokenParser)
             .through(TokenFilter.downArray.downObject.downField("foo").downObject.downField("a").downObject.removeFields(Set("3", "2")))
             .through(prettyPrinter(JsonStyle.SemiPretty(3)))
@@ -345,11 +346,11 @@ object TokenParserTests extends TestSuite with UTestScalaCheck {
       "inserting fields" - {
         "simple values" - {
 
-          val insertStream = Stream.emits(Seq(
-            Stream.emit(JsonTrue),
-            Stream.emit(JsonFalse)
-          ))
-
+          val insertStream = Stream.emits(
+            Seq(
+              Stream.emit(JsonTrue),
+              Stream.emit(JsonFalse)
+            ))
 
           val result = Stream
             .emit(jsonString)
@@ -392,10 +393,11 @@ object TokenParserTests extends TestSuite with UTestScalaCheck {
 
         "complex" - {
 
-          val insertStream = Stream.emits(Seq(
-            Stream.emits(Seq(ObjectStart, ObjectField.fromString("t"), JsonTrue, ObjectEnd)),
-            Stream.emits(Seq(ArrayStart, JsonNumber.fromString("10"), JsonNumber.fromString("20"), ArrayEnd))
-          ))
+          val insertStream = Stream.emits(
+            Seq(
+              Stream.emits(Seq(ObjectStart, ObjectField.fromString("t"), JsonTrue, ObjectEnd)),
+              Stream.emits(Seq(ArrayStart, JsonNumber.fromString("10"), JsonNumber.fromString("20"), ArrayEnd))
+            ))
 
           val result = Stream
             .emit(jsonString)
@@ -438,10 +440,10 @@ object TokenParserTests extends TestSuite with UTestScalaCheck {
 
         "early termination" - {
 
-          val insertStream = Stream.emits(Seq(
-            Stream.emit(JsonTrue)
-          ))
-
+          val insertStream = Stream.emits(
+            Seq(
+              Stream.emit(JsonTrue)
+            ))
 
           val result = Stream
             .emit(jsonString)

@@ -1,8 +1,21 @@
+import com.lucidchart.sbt.scalafmt.ScalafmtCorePlugin.autoImport.scalafmtOnCompile
 import sbt._
 import sbt.Keys._
 
-object Release {
-  val settings = Seq(
+object Common {
+  val scalaSettings = Seq(
+    scalaVersion := "2.12.6",
+    scalacOptions += "-Ypartial-unification",
+    scalafmtOnCompile := true
+  )
+
+  val testSettings = Seq(
+    testFrameworks += new TestFramework("utest.runner.Framework")
+  )
+
+  val releaseSettings = Seq(
+    organization := "com.github.derekjw",
+
     pomIncludeRepository := { _ => false },
 
     licenses := Seq("MIT" -> url("http://www.opensource.org/licenses/mit-license.php")),
@@ -37,4 +50,6 @@ object Release {
 
     publishArtifact in Test := false
   )
+
+  val settings: Seq[Def.Setting[_]] = scalaSettings ++ testSettings ++ releaseSettings
 }

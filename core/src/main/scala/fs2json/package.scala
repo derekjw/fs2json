@@ -32,16 +32,16 @@ package object fs2json {
     }
 
     def indent(output: Vector[Chunk.Bytes], level: Int, endToken: Boolean): Vector[Chunk.Bytes] = jsonStyle match {
-      case JsonStyle.Pretty => output :+ getIndent(if (endToken) level - 1 else level)
+      case JsonStyle.Pretty                                        => output :+ getIndent(if (endToken) level - 1 else level)
       case JsonStyle.SemiPretty(levelLimit) if level <= levelLimit => output :+ getIndent(if (endToken) level - 1 else level)
-      case _ if level == 0 => output :+ getIndent(0) // value stream, always new line
-      case _ => output
+      case _ if level == 0                                         => output :+ getIndent(0) // value stream, always new line
+      case _                                                       => output
     }
 
     def fieldSpace(output: Vector[Chunk.Bytes], level: Int): Vector[Chunk.Bytes] = jsonStyle match {
-      case JsonStyle.Pretty => output :+ space
+      case JsonStyle.Pretty                                        => output :+ space
       case JsonStyle.SemiPretty(levelLimit) if level <= levelLimit => output :+ space
-      case _ => output
+      case _                                                       => output
     }
 
     def formatOutput(token: JsonToken, state: State) = {
@@ -49,23 +49,24 @@ package object fs2json {
         case ObjectEnd | ArrayEnd =>
           state.lastToken match {
             case Some(ObjectStart | ArrayStart) => state.output
-            case _ => indent(state.output, state.level, endToken = true)
+            case _                              => indent(state.output, state.level, endToken = true)
           }
-        case _ => state.lastToken match {
-          case Some(ObjectStart | ArrayStart) => indent(state.output, state.level, endToken = false)
-          case Some(_: ObjectField) => fieldSpace(state.output :+ colon, state.level)
-          case None => state.output
-          case _ if state.level == 0 => indent(state.output, 0, endToken = false)
-          case _ => indent(state.output :+ comma, state.level, endToken = false)
-        }
+        case _ =>
+          state.lastToken match {
+            case Some(ObjectStart | ArrayStart) => indent(state.output, state.level, endToken = false)
+            case Some(_: ObjectField)           => fieldSpace(state.output :+ colon, state.level)
+            case None                           => state.output
+            case _ if state.level == 0          => indent(state.output, 0, endToken = false)
+            case _                              => indent(state.output :+ comma, state.level, endToken = false)
+          }
       }) :+ token.value
     }
 
     def processToken(state: State, token: JsonToken): State = {
       val nextLevel = token match {
         case ObjectStart | ArrayStart => state.level + 1
-        case ObjectEnd | ArrayEnd => state.level - 1
-        case _ => state.level
+        case ObjectEnd | ArrayEnd     => state.level - 1
+        case _                        => state.level
       }
       State(formatOutput(token, state), Some(token), nextLevel)
     }

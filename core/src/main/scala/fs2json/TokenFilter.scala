@@ -104,7 +104,11 @@ trait ObjectTokenFilterBuilder { parent =>
         }
       }
 
-    def next(stream: Stream[F, JsonToken], dropping: Boolean, offTarget: List[TokenFilter.Direction], toTarget: List[TokenFilter.Direction], onTarget: List[TokenFilter.Direction]): Pull[F, JsonToken, Unit] =
+    def next(stream: Stream[F, JsonToken],
+             dropping: Boolean,
+             offTarget: List[TokenFilter.Direction],
+             toTarget: List[TokenFilter.Direction],
+             onTarget: List[TokenFilter.Direction]): Pull[F, JsonToken, Unit] =
       stream.pull.unconsChunk.flatMap {
         case Some((jsonTokens, rest)) =>
           val state = findDropRanges(jsonTokens, 0, 0, State(dropping, Vector.empty, offTarget, toTarget, onTarget))
@@ -198,7 +202,10 @@ trait ObjectTokenFilterBuilder { parent =>
         }
       }
 
-    def sendOutput(remaining: Chunk[JsonToken], pos: Int, insertPositions: Vector[Int], insertLeg: Stream.StepLeg[F, Stream[F, JsonToken]]): Pull[F, JsonToken, Option[Stream.StepLeg[F, Stream[F, JsonToken]]]] =
+    def sendOutput(remaining: Chunk[JsonToken],
+                   pos: Int,
+                   insertPositions: Vector[Int],
+                   insertLeg: Stream.StepLeg[F, Stream[F, JsonToken]]): Pull[F, JsonToken, Option[Stream.StepLeg[F, Stream[F, JsonToken]]]] =
       insertPositions match {
         case Vector() => sendNonEmpty(remaining).as(Some(insertLeg))
         case nextPos +: rest =>
@@ -229,7 +236,11 @@ trait ObjectTokenFilterBuilder { parent =>
       else
         Pull.pure(())
 
-    def next(tokenLeg: Stream.StepLeg[F, JsonToken], maybeInsertsLeg: Option[Stream.StepLeg[F, Stream[F, JsonToken]]], offTarget: List[TokenFilter.Direction], toTarget: List[TokenFilter.Direction], onTarget: List[TokenFilter.Direction]): Pull[F, JsonToken, Unit] =
+    def next(tokenLeg: Stream.StepLeg[F, JsonToken],
+             maybeInsertsLeg: Option[Stream.StepLeg[F, Stream[F, JsonToken]]],
+             offTarget: List[TokenFilter.Direction],
+             toTarget: List[TokenFilter.Direction],
+             onTarget: List[TokenFilter.Direction]): Pull[F, JsonToken, Unit] =
       maybeInsertsLeg match {
         case Some(insertsLeg) =>
           tokenLeg.head.force.unconsChunk match {

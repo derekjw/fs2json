@@ -13,15 +13,15 @@ sealed trait JsonToken extends Product with Serializable {
 }
 
 case object ObjectStart extends JsonToken { val value = Chunk.Bytes(Array[Byte]('{')) }
-case object ObjectEnd extends JsonToken { val value = Chunk.Bytes(Array[Byte]('}'))}
+case object ObjectEnd extends JsonToken { val value = Chunk.Bytes(Array[Byte]('}')) }
 
 case class ObjectField(value: Chunk.Bytes) extends JsonToken
 object ObjectField {
   def fromString(str: String) = ObjectField(JsonString.fromString(str).value)
 }
 
-case object ArrayStart extends JsonToken { val value = Chunk.Bytes(Array[Byte]('['))}
-case object ArrayEnd extends JsonToken { val value = Chunk.Bytes(Array[Byte](']'))}
+case object ArrayStart extends JsonToken { val value = Chunk.Bytes(Array[Byte]('[')) }
+case object ArrayEnd extends JsonToken { val value = Chunk.Bytes(Array[Byte](']')) }
 
 // TODO: add decode methods for string and number
 case class JsonString(value: Chunk.Bytes) extends JsonToken

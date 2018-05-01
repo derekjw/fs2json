@@ -11,7 +11,9 @@ import utest._
 object JawnTest extends TestSuite with UTestScalaCheck {
   val tests = Tests {
     def roundTrip(json: Json): Vector[Json] =
-      Stream.emit(json.noSpaces).through(text.utf8Encode)
+      Stream
+        .emit(json.noSpaces)
+        .through(text.utf8Encode)
         .through(tokenParser)
         .through(jawn.valueStream)
         .toVector

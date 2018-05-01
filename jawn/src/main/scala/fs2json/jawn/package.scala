@@ -143,7 +143,7 @@ package object jawn {
       while (c != 34) { // "
         if (c == 92) { // \
           (byte(j + 1): @switch) match {
-            case 98 => { sb.append('\b'); j += 2 }
+            case 98  => { sb.append('\b'); j += 2 }
             case 102 => { sb.append('\f'); j += 2 }
             case 110 => { sb.append('\n'); j += 2 }
             case 114 => { sb.append('\r'); j += 2 }

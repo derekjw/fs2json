@@ -10,7 +10,8 @@ import io.circe.testing.instances._
 object CirceTest extends TestSuite with UTestScalaCheck {
   val tests = Tests {
     def roundTrip(json: Json): Vector[Json] =
-      Stream.emit(json)
+      Stream
+        .emit(json)
         .through(tokenStream)
         .through(valueStream)
         .toVector
