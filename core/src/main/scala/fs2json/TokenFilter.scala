@@ -134,96 +134,86 @@ trait ObjectTokenFilterBuilder { parent =>
     val insertObjectField = ObjectField.fromString(fieldName)
     val unit: Pull[F, JsonToken, Unit] = Pull.pure(())
 
-    case class State(insertPositions: Vector[Int], offTarget: List[TokenFilter.Direction], toTarget: List[TokenFilter.Direction], onTarget: List[TokenFilter.Direction])
+    case class State(offTarget: List[TokenFilter.Direction], toTarget: List[TokenFilter.Direction], onTarget: List[TokenFilter.Direction])
 
     @tailrec
-    def findInsertPositions(chunk: Chunk[JsonToken], pos: Int, state: State): State =
+    def findInsertPosition(chunk: Chunk[JsonToken], pos: Int, state: State): (Option[Int], State) =
       if (pos >= chunk.size) {
-        state
+        (None, state)
       } else {
         chunk(pos) match {
           case ObjectStart =>
             state match {
-              case State(insertPositions, Nil, TokenFilter.DownObject :: Nil, onTarget) => // found insert pos
-                findInsertPositions(chunk, pos + 1, State(insertPositions :+ (pos + 1), Nil, Nil, TokenFilter.DownObject :: onTarget))
-              case State(insertPositions, Nil, TokenFilter.DownObject :: toTarget, onTarget) => // down towards target
-                findInsertPositions(chunk, pos + 1, State(insertPositions, Nil, toTarget, TokenFilter.DownObject :: onTarget))
-              case State(insertPositions, offTarget, toTarget, onTarget) => // down off target
-                findInsertPositions(chunk, pos + 1, State(insertPositions, TokenFilter.DownObject :: offTarget, toTarget, onTarget))
+              case State(Nil, TokenFilter.DownObject :: Nil, onTarget) => // found insert pos
+                Some(pos + 1) -> State(Nil, Nil, TokenFilter.DownObject :: onTarget)
+              case State(Nil, TokenFilter.DownObject :: toTarget, onTarget) => // down towards target
+                findInsertPosition(chunk, pos + 1, State(Nil, toTarget, TokenFilter.DownObject :: onTarget))
+              case State(offTarget, toTarget, onTarget) => // down off target
+                findInsertPosition(chunk, pos + 1, State(TokenFilter.DownObject :: offTarget, toTarget, onTarget))
             }
           case ObjectEnd =>
             state match {
-              case State(insertPositions, Nil, toTarget, TokenFilter.DownObject :: (hd @ TokenFilter.DownField(_)) :: onTarget) => // up from target
-                findInsertPositions(chunk, pos + 1, State(insertPositions, Nil, hd :: TokenFilter.DownObject :: toTarget, onTarget))
-              case State(insertPositions, Nil, toTarget, TokenFilter.DownObject :: onTarget) => // up from target
-                findInsertPositions(chunk, pos + 1, State(insertPositions, Nil, TokenFilter.DownObject :: toTarget, onTarget))
-              case State(insertPositions, TokenFilter.DownObject :: TokenFilter.DownField(_) :: offTarget, toTarget, onTarget) => // up off target
-                findInsertPositions(chunk, pos + 1, State(insertPositions, offTarget, toTarget, onTarget))
-              case State(insertPositions, TokenFilter.DownObject :: offTarget, toTarget, onTarget) => // up off target
-                findInsertPositions(chunk, pos + 1, State(insertPositions, offTarget, toTarget, onTarget))
-              case _ => // TODO: better failure handling of bad json
+              case State(Nil, toTarget, TokenFilter.DownObject :: (hd @ TokenFilter.DownField(_)) :: onTarget) => // up from target
+                findInsertPosition(chunk, pos + 1, State(Nil, hd :: TokenFilter.DownObject :: toTarget, onTarget))
+              case State(Nil, toTarget, TokenFilter.DownObject :: onTarget) => // up from target
+                findInsertPosition(chunk, pos + 1, State(Nil, TokenFilter.DownObject :: toTarget, onTarget))
+              case State(TokenFilter.DownObject :: TokenFilter.DownField(_) :: offTarget, toTarget, onTarget) => // up off target
+                findInsertPosition(chunk, pos + 1, State(offTarget, toTarget, onTarget))
+              case State(TokenFilter.DownObject :: offTarget, toTarget, onTarget) => // up off target
+                findInsertPosition(chunk, pos + 1, State(offTarget, toTarget, onTarget))
+              case other => // TODO: better failure handling of bad json
                 throw new RuntimeException("ruh roh")
             }
           case ArrayStart =>
             state match {
-              case State(insertPositions, Nil, TokenFilter.DownArray :: toTarget, onTarget) => // down towards target
-                findInsertPositions(chunk, pos + 1, State(insertPositions, Nil, toTarget, TokenFilter.DownArray :: onTarget))
-              case State(insertPositions, offTarget, toTarget, onTarget) => // down off target
-                findInsertPositions(chunk, pos + 1, State(insertPositions, TokenFilter.DownArray :: offTarget, toTarget, onTarget))
+              case State(Nil, TokenFilter.DownArray :: toTarget, onTarget) => // down towards target
+                findInsertPosition(chunk, pos + 1, State(Nil, toTarget, TokenFilter.DownArray :: onTarget))
+              case State(offTarget, toTarget, onTarget) => // down off target
+                findInsertPosition(chunk, pos + 1, State(TokenFilter.DownArray :: offTarget, toTarget, onTarget))
             }
           case ArrayEnd =>
             state match {
-              case State(insertPositions, Nil, toTarget, TokenFilter.DownArray :: (hd @ TokenFilter.DownField(_)) :: onTarget) => // up from target
-                findInsertPositions(chunk, pos + 1, State(insertPositions, Nil, hd :: TokenFilter.DownArray :: toTarget, onTarget))
-              case State(insertPositions, Nil, toTarget, TokenFilter.DownArray :: onTarget) => // up from target
-                findInsertPositions(chunk, pos + 1, State(insertPositions, Nil, TokenFilter.DownArray :: toTarget, onTarget))
-              case State(insertPositions, TokenFilter.DownArray :: TokenFilter.DownField(_) :: offTarget, toTarget, onTarget) => // up off target
-                findInsertPositions(chunk, pos + 1, State(insertPositions, offTarget, toTarget, onTarget))
-              case State(insertPositions, TokenFilter.DownArray :: offTarget, toTarget, onTarget) => // up off target
-                findInsertPositions(chunk, pos + 1, State(insertPositions, offTarget, toTarget, onTarget))
+              case State(Nil, toTarget, TokenFilter.DownArray :: (hd @ TokenFilter.DownField(_)) :: onTarget) => // up from target
+                findInsertPosition(chunk, pos + 1, State(Nil, hd :: TokenFilter.DownArray :: toTarget, onTarget))
+              case State(Nil, toTarget, TokenFilter.DownArray :: onTarget) => // up from target
+                findInsertPosition(chunk, pos + 1, State(Nil, TokenFilter.DownArray :: toTarget, onTarget))
+              case State(TokenFilter.DownArray :: TokenFilter.DownField(_) :: offTarget, toTarget, onTarget) => // up off target
+                findInsertPosition(chunk, pos + 1, State(offTarget, toTarget, onTarget))
+              case State(TokenFilter.DownArray :: offTarget, toTarget, onTarget) => // up off target
+                findInsertPosition(chunk, pos + 1, State(offTarget, toTarget, onTarget))
               case _ => // TODO: better failure handling of bad json
                 throw new RuntimeException("ruh roh")
             }
           case objectField: ObjectField =>
             state match {
-              case State(insertPositions, Nil, TokenFilter.DownField(`objectField`) :: toTarget, onTarget) => // down towards target
-                findInsertPositions(chunk, pos + 1, State(insertPositions, Nil, toTarget, TokenFilter.DownField(`objectField`) :: onTarget))
-              case State(insertPositions, offTarget, toTarget, onTarget) => // down off target
-                findInsertPositions(chunk, pos + 1, State(insertPositions, TokenFilter.DownField(`objectField`) :: offTarget, toTarget, onTarget))
+              case State(Nil, TokenFilter.DownField(`objectField`) :: toTarget, onTarget) => // down towards target
+                findInsertPosition(chunk, pos + 1, State(Nil, toTarget, TokenFilter.DownField(`objectField`) :: onTarget))
+              case State(offTarget, toTarget, onTarget) => // down off target
+                findInsertPosition(chunk, pos + 1, State(TokenFilter.DownField(`objectField`) :: offTarget, toTarget, onTarget))
             }
           case JsonNull | JsonTrue | JsonFalse | _: JsonNumber | _: JsonString =>
             state match {
-              case State(_, TokenFilter.DownField(_) :: offTarget, _, _) =>
-                findInsertPositions(chunk, pos + 1, state.copy(offTarget = offTarget))
+              case State(TokenFilter.DownField(_) :: offTarget, _, _) =>
+                findInsertPosition(chunk, pos + 1, state.copy(offTarget = offTarget))
               case _ =>
-                findInsertPositions(chunk, pos + 1, state)
+                findInsertPosition(chunk, pos + 1, state)
             }
 
         }
       }
 
-    def sendOutput(remaining: Chunk[JsonToken],
-                   pos: Int,
-                   insertPositions: Vector[Int],
-                   insertLeg: Stream.StepLeg[F, Stream[F, JsonToken]]): Pull[F, JsonToken, Option[Stream.StepLeg[F, Stream[F, JsonToken]]]] =
-      insertPositions match {
-        case Vector() => sendNonEmpty(remaining).as(Some(insertLeg))
-        case nextPos +: rest =>
-          val (sendNow, sendLater) = remaining.splitAt(nextPos - pos)
-          sendNonEmpty(sendNow) >> {
-            insertLeg.head.force.uncons1 match {
-              case Right((stream, restInsertStream)) =>
-                Pull.output1(insertObjectField) >>
-                  stream.pull.stepLeg.flatMap(_.fold(unit)(sendInsertLeg)) >>
-                  sendOutput(sendLater, nextPos, rest, insertLeg.setHead(restInsertStream))
-              case Left(()) =>
-                insertLeg.stepLeg.flatMap {
-                  case Some(nextLeg) =>
-                    sendOutput(sendLater, nextPos, insertPositions, nextLeg)
-                  case None =>
-                    sendNonEmpty(sendLater).as(None)
-                }
-            }
+    def sendOutput(insertLeg: Stream.StepLeg[F, Stream[F, JsonToken]]): Pull[F, JsonToken, Option[Stream.StepLeg[F, Stream[F, JsonToken]]]] =
+      insertLeg.head.force.uncons1 match {
+        case Right((stream, restInsertStream)) =>
+          Pull.output1(insertObjectField) >>
+            stream.pull.stepLeg.flatMap(_.fold(unit)(sendInsertLeg))
+              .as(Some(insertLeg.setHead(restInsertStream)))
+        case Left(()) =>
+          insertLeg.stepLeg.flatMap {
+            case Some(nextLeg) =>
+              sendOutput(nextLeg)
+            case None =>
+              Pull.pure(None)
           }
       }
 
@@ -245,14 +235,18 @@ trait ObjectTokenFilterBuilder { parent =>
         case Some(insertsLeg) =>
           tokenLeg.head.force.unconsChunk match {
             case Right((jsonTokens, remaining)) =>
-              val state = findInsertPositions(jsonTokens, 0, State(Vector.empty, offTarget, toTarget, onTarget))
-              sendOutput(jsonTokens, 0, state.insertPositions, insertsLeg).flatMap { nextInsertsLeg =>
-                tokenLeg.stepLeg.flatMap {
-                  case Some(rest) =>
-                    next(rest.setHead(remaining ++ rest.head), nextInsertsLeg, state.offTarget, state.toTarget, state.onTarget)
-                  case None =>
-                    next(tokenLeg.setHead(remaining), nextInsertsLeg, state.offTarget, state.toTarget, state.onTarget)
-                }
+              val (pos, state) = findInsertPosition(jsonTokens, 0, State(offTarget, toTarget, onTarget))
+              pos match {
+                case Some(p) =>
+                  val (sendNow, sendLater) = jsonTokens.splitAt(p)
+                  sendNonEmpty(sendNow) >>
+                    sendOutput(insertsLeg).flatMap { restInsertStream =>
+                      next(tokenLeg.setHead(Segment.chunk(sendLater) ++ remaining), restInsertStream, state.offTarget, state.toTarget, state.onTarget)
+                    }
+
+                case None =>
+                  sendNonEmpty(jsonTokens) >>
+                    next(tokenLeg.setHead(remaining), maybeInsertsLeg, state.offTarget, state.toTarget, state.onTarget)
               }
             case Left(()) =>
               tokenLeg.stepLeg.flatMap {
