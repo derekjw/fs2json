@@ -3,14 +3,14 @@ package fs2json
 import java.nio.ByteBuffer
 
 import fs2.{Pipe, Pull, Segment, Stream}
-import _root_.jawn.{ByteBufferParser, FContext, Facade}
+import _root_.jawn.{ByteBufferParser, RawFContext, Facade}
 
 import scala.annotation.switch
 import scala.language.higherKinds
 
 package object jawn {
   def valueStream[F[_], J](implicit facade: Facade[J]): Pipe[F, JsonToken, J] = {
-    case class State(output: Vector[J], stack: List[FContext[J]])
+    case class State(output: Vector[J], stack: List[RawFContext[J]])
 
     def processToken(state: State, jsonToken: JsonToken): State = jsonToken match {
       case ObjectStart =>
@@ -18,11 +18,11 @@ package object jawn {
       case ObjectEnd =>
         state.stack match {
           case ctx :: parent :: rest =>
-            val obj = ctx.finish
-            parent.add(obj)
+            val obj = ctx.finish(0)
+            parent.add(obj, 0)
             state.copy(stack = parent :: rest)
           case ctx :: Nil =>
-            val obj = ctx.finish
+            val obj = ctx.finish(0)
             state.copy(output = state.output :+ obj, stack = Nil)
           case Nil =>
             throw JawnParserFailure("Unexpected end of object")
@@ -32,11 +32,11 @@ package object jawn {
       case ArrayEnd =>
         state.stack match {
           case ctx :: parent :: rest =>
-            val array = ctx.finish
-            parent.add(array)
+            val array = ctx.finish(0)
+            parent.add(array, 0)
             state.copy(stack = parent :: rest)
           case ctx :: Nil =>
-            val array = ctx.finish
+            val array = ctx.finish(0)
             state.copy(output = state.output :+ array, stack = Nil)
           case Nil =>
             throw JawnParserFailure("Unexpected end of array")
@@ -45,7 +45,7 @@ package object jawn {
         val str = parseString(objectField.value.toByteBuffer)
         state.stack match {
           case ctx :: _ =>
-            ctx.add(str)
+            ctx.add(str, 0)
             state
           case Nil =>
             state.copy(output = state.output :+ facade.jstring(str))
@@ -54,7 +54,7 @@ package object jawn {
         val str = parseString(jsonString.value.toByteBuffer)
         state.stack match {
           case ctx :: _ =>
-            ctx.add(str)
+            ctx.add(str, 0)
             state
           case Nil =>
             state.copy(output = state.output :+ facade.jstring(str))
@@ -64,14 +64,14 @@ package object jawn {
         val jValue = new ByteBufferParser[J](token.value.toByteBuffer).parse
         state.stack match {
           case ctx :: _ =>
-            ctx.add(jValue)
+            ctx.add(jValue, 0)
             state
           case Nil =>
             state.copy(output = state.output :+ jValue)
         }
     }
 
-    def next(stream: Stream[F, JsonToken], stack: List[FContext[J]]): Pull[F, J, Unit] =
+    def next(stream: Stream[F, JsonToken], stack: List[RawFContext[J]]): Pull[F, J, Unit] =
       stream.pull.uncons.flatMap {
         case Some((jsonTokens, rest)) =>
           val state = jsonTokens.fold(State(Vector.empty, stack))(processToken).force.run._2
