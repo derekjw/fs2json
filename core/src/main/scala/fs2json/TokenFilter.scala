@@ -228,30 +228,28 @@ trait ObjectTokenFilterBuilder { parent =>
 
     def next(tokenLeg: Stream.StepLeg[F, JsonToken],
              maybeInsertsLeg: Option[Stream.StepLeg[F, Stream[F, JsonToken]]],
-             offTarget: List[TokenFilter.Direction],
-             toTarget: List[TokenFilter.Direction],
-             onTarget: List[TokenFilter.Direction]): Pull[F, JsonToken, Unit] =
+             state: State): Pull[F, JsonToken, Unit] =
       maybeInsertsLeg match {
         case Some(insertsLeg) =>
           tokenLeg.head.force.unconsChunk match {
             case Right((jsonTokens, remaining)) =>
-              val (pos, state) = findInsertPosition(jsonTokens, 0, State(offTarget, toTarget, onTarget))
+              val (pos, nextState) = findInsertPosition(jsonTokens, 0, state)
               pos match {
                 case Some(p) =>
                   val (sendNow, sendLater) = jsonTokens.splitAt(p)
                   sendNonEmpty(sendNow) >>
                     sendOutput(insertsLeg).flatMap { restInsertStream =>
-                      next(tokenLeg.setHead(Segment.chunk(sendLater) ++ remaining), restInsertStream, state.offTarget, state.toTarget, state.onTarget)
+                      next(tokenLeg.setHead(Segment.chunk(sendLater) ++ remaining), restInsertStream, nextState)
                     }
 
                 case None =>
                   sendNonEmpty(jsonTokens) >>
-                    next(tokenLeg.setHead(remaining), maybeInsertsLeg, state.offTarget, state.toTarget, state.onTarget)
+                    next(tokenLeg.setHead(remaining), maybeInsertsLeg, nextState)
               }
             case Left(()) =>
               tokenLeg.stepLeg.flatMap {
                 case Some(rest) =>
-                  next(rest, maybeInsertsLeg, offTarget, toTarget, onTarget)
+                  next(rest, maybeInsertsLeg, state)
                 case None =>
                   Pull.done
               }
@@ -263,7 +261,7 @@ trait ObjectTokenFilterBuilder { parent =>
       s1.pull.stepLeg.flatMap {
         case Some(leg1) =>
           s2.pull.stepLeg.flatMap { leg2 =>
-            next(leg1, leg2, Nil, target.reverse, Nil)
+            next(leg1, leg2, State(Nil, target.reverse, Nil))
           }
         case None =>
           Pull.done
