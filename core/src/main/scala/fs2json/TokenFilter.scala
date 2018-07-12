@@ -206,7 +206,8 @@ trait ObjectTokenFilterBuilder { parent =>
       insertLeg.head.force.uncons1 match {
         case Right((stream, restInsertStream)) =>
           Pull.output1(insertObjectField) >>
-            stream.pull.stepLeg.flatMap(_.fold(unit)(sendInsertLeg))
+            stream.pull.stepLeg
+              .flatMap(_.fold(unit)(sendInsertLeg))
               .as(Some(insertLeg.setHead(restInsertStream)))
         case Left(()) =>
           insertLeg.stepLeg.flatMap {
@@ -226,9 +227,7 @@ trait ObjectTokenFilterBuilder { parent =>
       else
         Pull.pure(())
 
-    def next(tokenLeg: Stream.StepLeg[F, JsonToken],
-             maybeInsertsLeg: Option[Stream.StepLeg[F, Stream[F, JsonToken]]],
-             state: State): Pull[F, JsonToken, Unit] =
+    def next(tokenLeg: Stream.StepLeg[F, JsonToken], maybeInsertsLeg: Option[Stream.StepLeg[F, Stream[F, JsonToken]]], state: State): Pull[F, JsonToken, Unit] =
       maybeInsertsLeg match {
         case Some(insertsLeg) =>
           tokenLeg.head.force.unconsChunk match {

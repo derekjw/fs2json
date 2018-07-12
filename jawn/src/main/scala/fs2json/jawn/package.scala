@@ -3,7 +3,7 @@ package fs2json
 import java.nio.ByteBuffer
 
 import fs2.{Pipe, Pull, Segment, Stream}
-import _root_.jawn.{ByteBufferParser, RawFContext, Facade}
+import _root_.jawn.{ByteBufferParser, Facade, RawFContext}
 
 import scala.annotation.switch
 import scala.language.higherKinds
