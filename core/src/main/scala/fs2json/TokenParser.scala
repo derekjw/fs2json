@@ -1,6 +1,6 @@
 package fs2json
 
-import fs2.{Chunk, Pipe, Pull, Segment, Stream}
+import fs2.{Chunk, Pipe, Pull, Stream}
 
 import scala.annotation.{switch, tailrec}
 import scala.language.higherKinds
@@ -110,11 +110,11 @@ object TokenParser {
     parse(0, parserState.buffer.toArray, parserState.output, parserState.stateStack, done = true)
 
   private def next[F[_]](buffer: Chunk[Byte], stream: Stream[F, Chunk[Byte]], stateStack: List[ContextState]): Pull[F, JsonToken, Unit] =
-    stream.pull.unconsChunk.flatMap {
+    stream.pull.uncons.flatMap {
       case Some((byteChunks, rest)) =>
         val parserState = byteChunks.foldLeft(ParserState(Vector.empty, buffer, stateStack))(processSingleChunk)
         if (parserState.output.nonEmpty) {
-          Pull.output(Segment.seq(parserState.output)) >> next(parserState.buffer, rest, parserState.stateStack)
+          Pull.output(Chunk.seq(parserState.output)) >> next(parserState.buffer, rest, parserState.stateStack)
         } else {
           next(parserState.buffer, rest, parserState.stateStack)
         }
@@ -122,7 +122,7 @@ object TokenParser {
         val parserState = processRemaining(ParserState(Vector.empty, buffer, stateStack))
         // TODO: fail if buffer is not empty
         if (parserState.output.nonEmpty) {
-          Pull.output(Segment.seq(parserState.output)) >> Pull.done
+          Pull.output(Chunk.seq(parserState.output)) >> Pull.done
         } else {
           Pull.done
         }

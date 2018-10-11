@@ -15,7 +15,7 @@ object JawnTest extends TestSuite with UTestScalaCheck {
         .emit(json.noSpaces)
         .through(text.utf8Encode)
         .through(tokenParser)
-        .through(jawn.valueStream)
+        .through(jawn.valueStream[Pure, Json](facade))
         .toVector
 
     "for all json" - {

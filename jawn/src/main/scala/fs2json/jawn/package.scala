@@ -2,19 +2,19 @@ package fs2json
 
 import java.nio.ByteBuffer
 
-import fs2.{Pipe, Pull, Segment, Stream}
-import _root_.jawn.{ByteBufferParser, Facade, RawFContext}
+import fs2.{Chunk, Pipe, Pull, Stream}
+import _root_.jawn.{ByteBufferParser, RawFContext, RawFacade}
 
 import scala.annotation.switch
 import scala.language.higherKinds
 
 package object jawn {
-  def valueStream[F[_], J](implicit facade: Facade[J]): Pipe[F, JsonToken, J] = {
+  def valueStream[F[_], J](implicit facade: RawFacade[J]): Pipe[F, JsonToken, J] = {
     case class State(output: Vector[J], stack: List[RawFContext[J]])
 
     def processToken(state: State, jsonToken: JsonToken): State = jsonToken match {
       case ObjectStart =>
-        state.copy(stack = facade.objectContext() :: state.stack)
+        state.copy(stack = facade.objectContext(0) :: state.stack)
       case ObjectEnd =>
         state.stack match {
           case ctx :: parent :: rest =>
@@ -28,7 +28,7 @@ package object jawn {
             throw JawnParserFailure("Unexpected end of object")
         }
       case ArrayStart =>
-        state.copy(stack = facade.arrayContext() :: state.stack)
+        state.copy(stack = facade.arrayContext(0) :: state.stack)
       case ArrayEnd =>
         state.stack match {
           case ctx :: parent :: rest =>
@@ -48,7 +48,7 @@ package object jawn {
             ctx.add(str, 0)
             state
           case Nil =>
-            state.copy(output = state.output :+ facade.jstring(str))
+            state.copy(output = state.output :+ facade.jstring(str, 0))
         }
       case jsonString: JsonString =>
         val str = parseString(jsonString.value.toByteBuffer)
@@ -57,7 +57,7 @@ package object jawn {
             ctx.add(str, 0)
             state
           case Nil =>
-            state.copy(output = state.output :+ facade.jstring(str))
+            state.copy(output = state.output :+ facade.jstring(str, 0))
         }
       case token =>
         // TODO: do our own parsing
@@ -74,9 +74,9 @@ package object jawn {
     def next(stream: Stream[F, JsonToken], stack: List[RawFContext[J]]): Pull[F, J, Unit] =
       stream.pull.uncons.flatMap {
         case Some((jsonTokens, rest)) =>
-          val state = jsonTokens.fold(State(Vector.empty, stack))(processToken).force.run._2
+          val state = jsonTokens.foldLeft(State(Vector.empty, stack))(processToken)
           if (state.output.nonEmpty) {
-            Pull.output(Segment.seq(state.output)) >> next(rest, state.stack)
+            Pull.output(Chunk.seq(state.output)) >> next(rest, state.stack)
           } else {
             Pull.suspend(next(rest, state.stack))
           }

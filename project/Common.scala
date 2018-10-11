@@ -19,7 +19,7 @@ object Common {
       "circe-parser",
       "circe-testing",
       "circe-literal"
-    ).map("io.circe" %% _ % "0.10.0-M1" % Test)
+    ).map("io.circe" %% _ % "0.10.0-M2" % Test)
   )
 
   val releaseSettings = Seq(

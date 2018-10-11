@@ -1,6 +1,6 @@
 package fs2json
 
-import fs2._
+import fs2.{Chunk, _}
 
 import scala.annotation.tailrec
 import scala.language.higherKinds
@@ -109,20 +109,20 @@ trait ObjectTokenFilterBuilder { parent =>
              offTarget: List[TokenFilter.Direction],
              toTarget: List[TokenFilter.Direction],
              onTarget: List[TokenFilter.Direction]): Pull[F, JsonToken, Unit] =
-      stream.pull.unconsChunk.flatMap {
+      stream.pull.uncons.flatMap {
         case Some((jsonTokens, rest)) =>
           val state = findDropRanges(jsonTokens, 0, 0, State(dropping, Vector.empty, offTarget, toTarget, onTarget))
           state.dropRanges match {
             case Vector() =>
-              Pull.outputChunk(jsonTokens) >> next(rest, state.dropping, state.offTarget, state.toTarget, state.onTarget)
+              Pull.output(jsonTokens) >> next(rest, state.dropping, state.offTarget, state.toTarget, state.onTarget)
             case Vector((0, dropEnd)) if dropEnd == jsonTokens.size =>
               next(rest, state.dropping, state.offTarget, state.toTarget, state.onTarget)
             case dropRanges =>
-              val (_, lastChunk, result) = dropRanges.foldLeft((0, jsonTokens, Segment.empty[JsonToken])) {
+              val (_, lastChunk, result) = dropRanges.foldLeft((0, jsonTokens, Chunk.empty[JsonToken])) {
                 case ((pos, remaining, acc), (dropStart, dropEnd)) =>
-                  (dropEnd, remaining.drop(dropEnd - pos), acc ++ Segment.chunk(remaining.take(dropStart - pos)))
+                  (dropEnd, remaining.drop(dropEnd - pos), Chunk.concat(List(acc, remaining.take(dropStart - pos)))) // TODO: effecient concat
               }
-              Pull.output(result ++ Segment.chunk(lastChunk)) >> next(rest, state.dropping, state.offTarget, state.toTarget, state.onTarget)
+              Pull.output(Chunk.concat(List(result, lastChunk))) >> next(rest, state.dropping, state.offTarget, state.toTarget, state.onTarget)
           }
         case None => Pull.done
       }
@@ -203,13 +203,15 @@ trait ObjectTokenFilterBuilder { parent =>
       }
 
     def sendOutput(insertLeg: Stream.StepLeg[F, Stream[F, JsonToken]]): Pull[F, JsonToken, Option[Stream.StepLeg[F, Stream[F, JsonToken]]]] =
-      insertLeg.head.force.uncons1 match {
-        case Right((stream, restInsertStream)) =>
+      insertLeg.head match {
+        case chunk if chunk.nonEmpty =>
+          val stream = chunk(0)
+          val restInsertStream = chunk.drop(1)
           Pull.output1(insertObjectField) >>
             stream.pull.stepLeg
               .flatMap(_.fold(unit)(sendInsertLeg))
               .as(Some(insertLeg.setHead(restInsertStream)))
-        case Left(()) =>
+        case _ =>
           insertLeg.stepLeg.flatMap {
             case Some(nextLeg) =>
               sendOutput(nextLeg)
@@ -223,29 +225,34 @@ trait ObjectTokenFilterBuilder { parent =>
 
     def sendNonEmpty(chunk: Chunk[JsonToken]): Pull[F, JsonToken, Unit] =
       if (chunk.nonEmpty)
-        Pull.outputChunk(chunk)
+        Pull.output(chunk)
       else
         Pull.pure(())
 
     def next(tokenLeg: Stream.StepLeg[F, JsonToken], maybeInsertsLeg: Option[Stream.StepLeg[F, Stream[F, JsonToken]]], state: State): Pull[F, JsonToken, Unit] =
       maybeInsertsLeg match {
         case Some(insertsLeg) =>
-          tokenLeg.head.force.unconsChunk match {
-            case Right((jsonTokens, remaining)) =>
+          tokenLeg.head match {
+            case jsonTokens if jsonTokens.nonEmpty =>
               val (pos, nextState) = findInsertPosition(jsonTokens, 0, state)
               pos match {
                 case Some(p) =>
                   val (sendNow, sendLater) = jsonTokens.splitAt(p)
                   sendNonEmpty(sendNow) >>
                     sendOutput(insertsLeg).flatMap { restInsertStream =>
-                      next(tokenLeg.setHead(Segment.chunk(sendLater) ++ remaining), restInsertStream, nextState)
+                      next(tokenLeg.setHead(sendLater), restInsertStream, nextState)
                     }
 
                 case None =>
                   sendNonEmpty(jsonTokens) >>
-                    next(tokenLeg.setHead(remaining), maybeInsertsLeg, nextState)
+                    tokenLeg.stepLeg.flatMap {
+                      case Some(rest) =>
+                        next(rest, maybeInsertsLeg, nextState)
+                      case None =>
+                        Pull.done
+                    }
               }
-            case Left(()) =>
+            case _ =>
               tokenLeg.stepLeg.flatMap {
                 case Some(rest) =>
                   next(rest, maybeInsertsLeg, state)

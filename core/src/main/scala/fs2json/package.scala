@@ -73,7 +73,7 @@ package object fs2json {
     def next(stream: fs2.Stream[F, JsonToken], lastToken: Option[JsonToken] = None, level: Int = 0): fs2.Pull[F, Byte, Unit] =
       stream.pull.uncons.flatMap {
         case Some((tokens, rest)) =>
-          val state = tokens.fold(State(Vector.empty, lastToken, level))(processToken).force.run._2
+          val state = tokens.foldLeft(State(Vector.empty, lastToken, level))(processToken)
           val outputSize = state.output.foldLeft(0)(_ + _.size)
           val outputBuffer = ByteBuffer.allocate(outputSize)
           state.output.foreach { chunk =>
@@ -81,7 +81,7 @@ package object fs2json {
           }
           outputBuffer.flip()
           val compacted = Chunk.byteBuffer(outputBuffer)
-          Pull.outputChunk(compacted) >> next(rest, state.lastToken, state.level)
+          Pull.output(compacted) >> next(rest, state.lastToken, state.level)
         case None => fs2.Pull.done
       }
 
