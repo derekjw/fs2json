@@ -4,22 +4,22 @@ import sbt.Keys._
 
 object Common {
   val scalaSettings = Seq(
-    scalaVersion := "2.12.6",
+    scalaVersion := "2.12.7",
     scalacOptions += "-Ypartial-unification",
     scalafmtOnCompile := true
   )
 
   val testSettings = Seq(
-    testFrameworks += new TestFramework("utest.runner.Framework"),
+    testFrameworks := Seq(new TestFramework("utest.runner.Framework")),
     libraryDependencies ++= Seq(
-      "com.lihaoyi" %% "utest" % "0.5.3" % Test
+      "com.lihaoyi" %% "utest" % "0.6.5" % Test
     ) ++ Seq(
       "circe-core",
       "circe-generic",
       "circe-parser",
       "circe-testing",
       "circe-literal"
-    ).map("io.circe" %% _ % "0.10.0-M2" % Test)
+    ).map("io.circe" %% _ % "0.10.0" % Test)
   )
 
   val releaseSettings = Seq(
