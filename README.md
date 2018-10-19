@@ -21,13 +21,13 @@ Until this library hits version 1.0, breaking changes are expected and bugs are 
 
 ### SBT
 ```
-libraryDependencies += "com.github.derekjw" %% "fs2json-core" % "0.7.7"
+libraryDependencies += "com.github.derekjw" %% "fs2json-core" % "0.8.0"
 
 // optional jawn library
-libraryDependencies += "com.github.derekjw" %% "fs2json-jawn" % "0.7.7"
+libraryDependencies += "com.github.derekjw" %% "fs2json-jawn" % "0.8.0"
 
 // optional circe library
-libraryDependencies += "com.github.derekjw" %% "fs2json-circe" % "0.7.7"
+libraryDependencies += "com.github.derekjw" %% "fs2json-circe" % "0.8.0"
 ```
 
 ### Examples
